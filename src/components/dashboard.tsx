@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { FileText, Plus, RefreshCw } from "lucide-react";
 
 import type { CategoryWithCount, SopWithMediaCount } from "@/lib/sops/queries";
-import type { KnowledgeBaseRow, PlatformRow } from "@/lib/sops/types";
+import type { CategoryRow, KnowledgeBaseRow, PlatformRow } from "@/lib/sops/types";
 import { sopHref } from "@/lib/sops/nav";
 import { cn } from "@/lib/utils";
 import { PlatformSwitcher } from "./platform-switcher";
@@ -12,6 +12,7 @@ import { CategoryNav } from "./category-nav";
 import { SopList } from "./sop-list";
 import { SopView } from "./sop-view";
 import { SopEditor } from "./sop-editor";
+import { CategoryDialog } from "./category-dialog";
 import { CategoryNavSkeleton, SopListSkeleton } from "./skeletons";
 
 type CatCache = Record<number, CategoryWithCount[]>;
@@ -37,6 +38,9 @@ export function Dashboard({
   const [sopId, setSopId] = useState(initialSopId);
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
+  // Category dialog: open + its target (null target = create, a row = edit).
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [catDialogTarget, setCatDialogTarget] = useState<CategoryRow | null>(null);
 
   // Client caches: a category's SOPs / a platform's categories are fetched once and reused.
   // Only the refresh button forces a refetch.
@@ -174,6 +178,48 @@ export function Dashboard({
     reload();
   }, [reload, syncUrl]);
 
+  const openCreateCategory = useCallback(() => {
+    setCatDialogTarget(null);
+    setCatDialogOpen(true);
+  }, []);
+
+  const openEditCategory = useCallback((cat: CategoryRow) => {
+    setCatDialogTarget(cat);
+    setCatDialogOpen(true);
+  }, []);
+
+  const onCategorySaved = useCallback(
+    (cat: CategoryRow) => {
+      if (curPlatform.current == null) return;
+      void fetchCategories(curPlatform.current, true); // pick up the new/renamed category
+      if (catDialogTarget == null) {
+        // Created: select the new (empty) category.
+        curCategory.current = cat.id;
+        setCategoryId(cat.id);
+        setSopId(null);
+        setEditing(false);
+        setCreating(false);
+        syncUrl(curPlatform.current, cat.id, null);
+        void fetchSops(cat.id, true);
+      }
+    },
+    [catDialogTarget, syncUrl, fetchCategories, fetchSops],
+  );
+
+  const onCategoryDeleted = useCallback(
+    (id: number) => {
+      if (curPlatform.current == null) return;
+      if (curCategory.current === id) {
+        curCategory.current = null;
+        setCategoryId(null);
+        setSopId(null);
+        syncUrl(curPlatform.current, null, null);
+      }
+      void fetchCategories(curPlatform.current, true);
+    },
+    [syncUrl, fetchCategories],
+  );
+
   const categories = platformId != null ? catCache[platformId] : undefined;
   const sops = categoryId != null ? sopCache[categoryId] : undefined;
   const selectedSop = sops?.find((s) => s.id === sopId) ?? null;
@@ -197,14 +243,28 @@ export function Dashboard({
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-          <p className="px-3 pb-1.5 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Categories
-          </p>
+          <div className="flex items-center justify-between px-3 pb-1.5 pt-2">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Categories
+            </p>
+            {platformId != null && (
+              <button
+                type="button"
+                onClick={openCreateCategory}
+                title="New category"
+                aria-label="New category"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Plus className="size-3.5" />
+              </button>
+            )}
+          </div>
           {categories ? (
             <CategoryNav
               categories={categories}
               currentCategoryId={categoryId}
               onSelect={selectCategory}
+              onEdit={openEditCategory}
             />
           ) : catLoading ? (
             <CategoryNavSkeleton />
@@ -296,6 +356,17 @@ export function Dashboard({
           </div>
         )}
       </section>
+
+      {platformId != null && (
+        <CategoryDialog
+          open={catDialogOpen}
+          onOpenChange={setCatDialogOpen}
+          platformId={platformId}
+          category={catDialogTarget}
+          onSaved={onCategorySaved}
+          onDeleted={onCategoryDeleted}
+        />
+      )}
     </div>
   );
 }

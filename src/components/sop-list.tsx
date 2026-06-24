@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ImageIcon, Search } from "lucide-react";
 
 import type { SopWithMediaCount } from "@/lib/sops/queries";
@@ -69,12 +69,31 @@ export const SopList = memo(function SopList({
   onSelect: (sop: SopWithMediaCount) => void;
 }) {
   const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isMac, setIsMac] = useState(false);
+
+  useEffect(() => {
+    setIsMac(/Mac|iPhone|iPad|iPod/.test(navigator.platform));
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return sops;
     return sops.filter(
       (s) =>
+        String(s.id).toLowerCase().includes(q) ||
         (s.title ?? "").toLowerCase().includes(q) ||
         (s.content ?? "").toLowerCase().includes(q),
     );
@@ -85,11 +104,15 @@ export const SopList = memo(function SopList({
       <div className="relative px-4 py-3">
         <Search className="pointer-events-none absolute left-7 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
+          ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter procedures"
-          className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          placeholder="Filter procedures or ID"
+          className="h-9 w-full rounded-md border bg-background pl-9 pr-12 text-sm outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
         />
+        <kbd className="pointer-events-none absolute right-7 top-1/2 hidden -translate-y-1/2 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:flex">
+          {isMac ? "⌘" : "Ctrl"} K
+        </kbd>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">

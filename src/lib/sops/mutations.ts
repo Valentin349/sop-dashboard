@@ -3,9 +3,67 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { getServerClient } from "@/lib/supabase/server";
-import type { KnowledgeBaseMediaRow, KnowledgeBaseRow } from "./types";
+import type {
+  CategoryRow,
+  KnowledgeBaseMediaRow,
+  KnowledgeBaseRow,
+} from "./types";
 
 // Writes to ai_agent.knowledge_base and its media + storage objects. Service-role only.
+
+export async function createCategory(fields: {
+  platform_id: number;
+  name: string;
+  description: string | null;
+}): Promise<CategoryRow> {
+  const db = getServerClient();
+  const { data, error } = await db
+    .from("knowledge_base_categories")
+    .insert({
+      platform_id: fields.platform_id,
+      name: fields.name,
+      description: fields.description,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateCategory(
+  id: number,
+  patch: { name?: string; description?: string | null },
+): Promise<CategoryRow> {
+  const db = getServerClient();
+  const { data, error } = await db
+    .from("knowledge_base_categories")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Deleting a category would orphan any SOPs pointing at it, so refuse unless it's empty.
+export async function deleteCategory(id: number): Promise<void> {
+  const db = getServerClient();
+  const { count, error: countErr } = await db
+    .from("knowledge_base")
+    .select("id", { count: "exact", head: true })
+    .eq("category_id", id);
+  if (countErr) throw countErr;
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      `Category has ${count} SOP(s). Move or delete them before deleting the category.`,
+    );
+  }
+  const { error } = await db
+    .from("knowledge_base_categories")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
 
 export interface SopPatch {
   title?: string;
