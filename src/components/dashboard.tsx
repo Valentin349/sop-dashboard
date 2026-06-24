@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { FileText, RefreshCw } from "lucide-react";
 
-import type { CategoryWithCount } from "@/lib/sops/queries";
+import type { CategoryWithCount, SopWithMediaCount } from "@/lib/sops/queries";
 import type { KnowledgeBaseRow, PlatformRow } from "@/lib/sops/types";
 import { sopHref } from "@/lib/sops/nav";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,7 @@ import { SopView } from "./sop-view";
 import { CategoryNavSkeleton, SopListSkeleton } from "./skeletons";
 
 type CatCache = Record<number, CategoryWithCount[]>;
-type SopCache = Record<number, KnowledgeBaseRow[]>;
+type SopCache = Record<number, SopWithMediaCount[]>;
 
 export function Dashboard({
   platforms,
@@ -29,7 +29,7 @@ export function Dashboard({
   initialCategoryId: number | null;
   initialSopId: number | null;
   initialCategories: CategoryWithCount[];
-  initialSops: KnowledgeBaseRow[];
+  initialSops: SopWithMediaCount[];
 }) {
   const [platformId, setPlatformId] = useState(initialPlatformId);
   const [categoryId, setCategoryId] = useState(initialCategoryId);

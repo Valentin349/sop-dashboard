@@ -1,9 +1,9 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { ImageIcon, Search } from "lucide-react";
 
-import type { KnowledgeBaseRow } from "@/lib/sops/types";
+import type { SopWithMediaCount } from "@/lib/sops/queries";
 import { cn } from "@/lib/utils";
 
 function preview(content: string | null): string {
@@ -18,9 +18,9 @@ const SopRow = memo(function SopRow({
   active,
   onSelect,
 }: {
-  sop: KnowledgeBaseRow;
+  sop: SopWithMediaCount;
   active: boolean;
-  onSelect: (sop: KnowledgeBaseRow) => void;
+  onSelect: (sop: SopWithMediaCount) => void;
 }) {
   return (
     <button
@@ -35,11 +35,20 @@ const SopRow = memo(function SopRow({
     >
       <span
         className={cn(
-          "block text-[13px] leading-snug",
+          "flex items-start justify-between gap-2 text-[13px] leading-snug",
           active ? "font-semibold text-foreground" : "font-medium text-foreground/90",
         )}
       >
-        {sop.title ?? "Untitled"}
+        <span className="min-w-0">{sop.title ?? "Untitled"}</span>
+        {sop.mediaCount > 0 && (
+          <span
+            title={`${sop.mediaCount} image${sop.mediaCount === 1 ? "" : "s"}`}
+            className="mt-px flex shrink-0 items-center gap-0.5 text-[11px] font-normal tabular-nums text-muted-foreground"
+          >
+            <ImageIcon className="size-3" />
+            {sop.mediaCount}
+          </span>
+        )}
       </span>
       <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
         {preview(sop.content)}
@@ -53,9 +62,9 @@ export const SopList = memo(function SopList({
   selectedId,
   onSelect,
 }: {
-  sops: KnowledgeBaseRow[];
+  sops: SopWithMediaCount[];
   selectedId: number | null;
-  onSelect: (sop: KnowledgeBaseRow) => void;
+  onSelect: (sop: SopWithMediaCount) => void;
 }) {
   const [query, setQuery] = useState("");
 

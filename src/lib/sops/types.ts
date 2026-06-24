@@ -16,6 +16,30 @@ export interface KnowledgeBaseRow {
   data_source: string | null;
 }
 
+// One media asset attached to a SOP. The object lives in a private storage bucket at
+// `path/filename`; the browser can't read it directly, so the server hands back a signed URL.
+export interface KnowledgeBaseMediaRow {
+  id: number;
+  name: string | null;
+  created_at: string;
+  bucket: string | null;
+  path: string | null;
+  filename: string | null;
+  media_type: string | null; // "image" | "video"
+  knowledge_base_id: number;
+  index: number | null;
+  description: string | null;
+}
+
+// A media row enriched with a short-lived signed URL, safe to send to the client.
+export interface SopMedia {
+  id: number;
+  url: string;
+  mediaType: string;
+  description: string | null;
+  index: number | null;
+}
+
 export interface CategoryRow {
   id: number;
   created_at: string;
