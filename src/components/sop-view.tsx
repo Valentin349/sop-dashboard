@@ -86,7 +86,7 @@ export const SopView = memo(function SopView({
   return (
     <div className="flex h-full flex-col">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 border-b px-8 py-3.5 text-[13px] text-muted-foreground">
+      <div className="flex items-center gap-1.5 border-b px-12 py-3.5 text-[13px] text-muted-foreground">
         <span>{platformName}</span>
         <ChevronRight className="size-3.5 opacity-60" />
         <span>{categoryName}</span>
@@ -95,14 +95,22 @@ export const SopView = memo(function SopView({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <article className="mx-auto max-w-[68ch] px-8 py-12">
+        <article className="max-w-4xl px-12 py-12">
           <header className="mb-8">
             <h1 className="font-serif text-[2rem] leading-tight font-semibold tracking-tight text-balance">
               {sop.title ?? "Untitled"}
             </h1>
-            {created && (
-              <p className="mt-3 text-[13px] text-muted-foreground">{created}</p>
-            )}
+            <p className="mt-3 flex items-center gap-2 text-[13px] text-muted-foreground">
+              <span className="font-mono select-all" title="SOP id">
+                ID {sop.id}
+              </span>
+              {created && (
+                <>
+                  <span className="opacity-50">·</span>
+                  <span>{created}</span>
+                </>
+              )}
+            </p>
           </header>
 
           <div className="font-serif text-[1.05rem] leading-[1.75] whitespace-pre-wrap break-words text-foreground/90">

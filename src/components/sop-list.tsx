@@ -51,6 +51,8 @@ const SopRow = memo(function SopRow({
         )}
       </span>
       <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+        <span className="font-mono text-muted-foreground/70">#{sop.id}</span>
+        {sop.content && <span className="mx-1.5 opacity-40">·</span>}
         {preview(sop.content)}
       </p>
     </button>
