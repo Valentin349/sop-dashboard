@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, Plus, RefreshCw } from "lucide-react";
 
 import type { CategoryWithCount, SopWithMediaCount } from "@/lib/sops/queries";
@@ -22,6 +22,12 @@ import { CategoryNavSkeleton, SopListSkeleton } from "./skeletons";
 
 type CatCache = Record<number, CategoryWithCount[]>;
 type SopCache = Record<number, SopWithMediaCount[]>;
+
+// SOP-list column width, drag-resizable within these bounds.
+const LIST_MIN_W = 260;
+const LIST_MAX_W = 560;
+const LIST_DEFAULT_W = 320;
+const LIST_WIDTH_KEY = "sop-list-width";
 
 export function Dashboard({
   platforms,
@@ -48,6 +54,37 @@ export function Dashboard({
   // Category dialog: open + its target (null target = create, a row = edit).
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [catDialogTarget, setCatDialogTarget] = useState<CategoryRow | null>(null);
+
+  // Resizable SOP-list width (loaded from localStorage after mount to avoid SSR mismatch).
+  const [listWidth, setListWidth] = useState(LIST_DEFAULT_W);
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(LIST_WIDTH_KEY));
+    if (saved >= LIST_MIN_W && saved <= LIST_MAX_W) setListWidth(saved);
+  }, []);
+
+  function startResize(e: React.PointerEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = listWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    let latest = startW;
+    const move = (ev: PointerEvent) => {
+      latest = Math.min(LIST_MAX_W, Math.max(LIST_MIN_W, startW + ev.clientX - startX));
+      setListWidth(latest);
+    };
+    const up = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      try {
+        localStorage.setItem(LIST_WIDTH_KEY, String(latest));
+      } catch {}
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
 
   // Client caches: a category's SOPs / a platform's categories are fetched once and reused.
   // Only the refresh button forces a refetch.
@@ -295,7 +332,10 @@ export function Dashboard({
       </aside>
 
       {/* Column 2 — SOP list */}
-      <aside className="flex w-80 shrink-0 flex-col border-r bg-background">
+      <aside
+        style={{ width: listWidth }}
+        className="flex shrink-0 flex-col bg-background"
+      >
         {categoryId == null ? (
           <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
             Choose a category to list its SOPs.
@@ -342,6 +382,15 @@ export function Dashboard({
           </>
         )}
       </aside>
+
+      {/* Resizer between the SOP list and the view — drag to widen/narrow the list */}
+      <div
+        onPointerDown={startResize}
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize"
+        className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-ring/60 active:bg-ring"
+      />
 
       {/* Column 3 — full SOP view / editor */}
       <section className="min-w-0 flex-1 bg-background">
