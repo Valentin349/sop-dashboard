@@ -10,8 +10,9 @@ export interface KnowledgeBaseRow {
   platform_id: number | null;
   category_id: number | null;
   is_come_back: boolean | null;
-  // Stored as a json-ish text blob upstream (category / function / media_paths / ...).
-  metafield: string | null;
+  // Upstream this is a json-ish blob (category / function / media_paths / ...). Comes back
+  // as a string for Python-dict-style rows, or a parsed object for valid-JSON rows.
+  metafield: string | Record<string, unknown> | null;
   data_source: string | null;
 }
 
