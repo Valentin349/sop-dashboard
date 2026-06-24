@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, memo, useEffect, useState, type ReactNode } from "react";
-import { ChevronRight, ImageIcon, Play } from "lucide-react";
+import { ChevronRight, ImageIcon, Pencil, Play } from "lucide-react";
 
 import type { KnowledgeBaseRow, SopMedia } from "@/lib/sops/types";
 import {
@@ -55,10 +55,12 @@ export const SopView = memo(function SopView({
   sop,
   platformName,
   categoryName,
+  onEdit,
 }: {
   sop: KnowledgeBaseRow;
   platformName: string;
   categoryName: string;
+  onEdit?: () => void;
 }) {
   const created = formatDate(sop.created_at);
 
@@ -86,12 +88,24 @@ export const SopView = memo(function SopView({
   return (
     <div className="flex h-full flex-col">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 border-b px-12 py-3.5 text-[13px] text-muted-foreground">
+      <div className="flex items-center gap-1.5 border-b px-12 py-3 text-[13px] text-muted-foreground">
         <span>{platformName}</span>
         <ChevronRight className="size-3.5 opacity-60" />
         <span>{categoryName}</span>
         <ChevronRight className="size-3.5 opacity-60" />
-        <span className="font-medium text-foreground">{sop.title ?? "Untitled"}</span>
+        <span className="min-w-0 truncate font-medium text-foreground">
+          {sop.title ?? "Untitled"}
+        </span>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-foreground transition-colors hover:bg-accent"
+          >
+            <Pencil className="size-3.5" />
+            Edit
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

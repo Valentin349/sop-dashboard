@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { FileText, RefreshCw } from "lucide-react";
+import { FileText, Plus, RefreshCw } from "lucide-react";
 
 import type { CategoryWithCount, SopWithMediaCount } from "@/lib/sops/queries";
 import type { KnowledgeBaseRow, PlatformRow } from "@/lib/sops/types";
@@ -11,6 +11,7 @@ import { PlatformSwitcher } from "./platform-switcher";
 import { CategoryNav } from "./category-nav";
 import { SopList } from "./sop-list";
 import { SopView } from "./sop-view";
+import { SopEditor } from "./sop-editor";
 import { CategoryNavSkeleton, SopListSkeleton } from "./skeletons";
 
 type CatCache = Record<number, CategoryWithCount[]>;
@@ -34,6 +35,8 @@ export function Dashboard({
   const [platformId, setPlatformId] = useState(initialPlatformId);
   const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [sopId, setSopId] = useState(initialSopId);
+  const [editing, setEditing] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   // Client caches: a category's SOPs / a platform's categories are fetched once and reused.
   // Only the refresh button forces a refetch.
@@ -94,6 +97,8 @@ export function Dashboard({
       setPlatformId(pid);
       setCategoryId(null);
       setSopId(null);
+      setEditing(false);
+      setCreating(false);
       syncUrl(pid, null, null);
       void fetchCategories(pid);
     },
@@ -105,6 +110,8 @@ export function Dashboard({
       curCategory.current = cid;
       setCategoryId(cid);
       setSopId(null);
+      setEditing(false);
+      setCreating(false);
       syncUrl(platformId, cid, null);
       void fetchSops(cid);
     },
@@ -114,6 +121,8 @@ export function Dashboard({
   const selectSop = useCallback(
     (sop: KnowledgeBaseRow) => {
       setSopId(sop.id);
+      setEditing(false);
+      setCreating(false);
       syncUrl(platformId, categoryId, sop.id);
     },
     [platformId, categoryId, syncUrl],
@@ -123,6 +132,47 @@ export function Dashboard({
     if (curPlatform.current != null) void fetchCategories(curPlatform.current, true);
     if (curCategory.current != null) void fetchSops(curCategory.current, true);
   }, [fetchCategories, fetchSops]);
+
+  // After a write, re-pull the current category's SOPs + the platform's category counts.
+  const reload = useCallback(() => {
+    if (curPlatform.current != null) void fetchCategories(curPlatform.current, true);
+    if (curCategory.current != null) void fetchSops(curCategory.current, true);
+  }, [fetchCategories, fetchSops]);
+
+  const startEdit = useCallback(() => setEditing(true), []);
+  const startCreate = useCallback(() => setCreating(true), []);
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setCreating(false);
+    reload(); // media may have changed via the editor's immediate ops
+  }, [reload]);
+
+  const onSopSaved = useCallback(
+    (saved: KnowledgeBaseRow) => {
+      if (creating) {
+        setCreating(false);
+        if (saved.category_id != null && saved.category_id !== curCategory.current) {
+          curCategory.current = saved.category_id;
+          setCategoryId(saved.category_id);
+        }
+        setSopId(saved.id);
+        syncUrl(curPlatform.current, saved.category_id ?? null, saved.id);
+        if (curPlatform.current != null) void fetchCategories(curPlatform.current, true);
+        if (saved.category_id != null) void fetchSops(saved.category_id, true);
+      } else {
+        setEditing(false);
+        reload();
+      }
+    },
+    [creating, reload, syncUrl, fetchCategories, fetchSops],
+  );
+
+  const onSopDeleted = useCallback(() => {
+    setEditing(false);
+    setSopId(null);
+    syncUrl(curPlatform.current, curCategory.current, null);
+    reload();
+  }, [reload, syncUrl]);
 
   const categories = platformId != null ? catCache[platformId] : undefined;
   const sops = categoryId != null ? sopCache[categoryId] : undefined;
@@ -172,10 +222,19 @@ export function Dashboard({
           <>
             <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
               <h2 className="truncate text-sm font-semibold">{categoryName}</h2>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-[11px] tabular-nums text-muted-foreground">
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="mr-1 text-[11px] tabular-nums text-muted-foreground">
                   {sops?.length ?? ""}
                 </span>
+                <button
+                  type="button"
+                  onClick={startCreate}
+                  title="New SOP"
+                  aria-label="New SOP"
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Plus className="size-4" />
+                </button>
                 <button
                   type="button"
                   onClick={refresh}
@@ -197,13 +256,36 @@ export function Dashboard({
         )}
       </aside>
 
-      {/* Column 3 — full SOP view */}
+      {/* Column 3 — full SOP view / editor */}
       <section className="min-w-0 flex-1 bg-background">
-        {selectedSop ? (
+        {creating && platformId != null ? (
+          <SopEditor
+            mode="create"
+            sop={null}
+            platformId={platformId}
+            categoryId={categoryId}
+            categories={categories ?? []}
+            onCancel={cancelEdit}
+            onSaved={onSopSaved}
+            onDeleted={onSopDeleted}
+          />
+        ) : editing && selectedSop && platformId != null ? (
+          <SopEditor
+            mode="edit"
+            sop={selectedSop}
+            platformId={platformId}
+            categoryId={categoryId}
+            categories={categories ?? []}
+            onCancel={cancelEdit}
+            onSaved={onSopSaved}
+            onDeleted={onSopDeleted}
+          />
+        ) : selectedSop ? (
           <SopView
             sop={selectedSop}
             platformName={platformName}
             categoryName={categoryName}
+            onEdit={startEdit}
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-12 text-center">
