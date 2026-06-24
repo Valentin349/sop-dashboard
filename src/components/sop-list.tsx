@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { ImageIcon, Search, SlidersHorizontal, X } from "lucide-react";
+import { Flag, ImageIcon, Search, SlidersHorizontal, X } from "lucide-react";
 
 import type { SopWithMediaCount } from "@/lib/sops/queries";
 import type { ProductRow } from "@/lib/sops/types";
@@ -25,6 +25,7 @@ const SopRow = memo(function SopRow({
   active: boolean;
   onSelect: (sop: SopWithMediaCount) => void;
 }) {
+  const comeBack = sop.is_come_back === true;
   return (
     <button
       type="button"
@@ -33,7 +34,9 @@ const SopRow = memo(function SopRow({
         "block w-full border-l-2 px-3 py-2.5 text-left transition-colors",
         active
           ? "border-foreground bg-accent"
-          : "border-transparent hover:bg-accent/60",
+          : comeBack
+            ? "border-amber-400/80 bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-400/10 dark:hover:bg-amber-400/[0.16]"
+            : "border-transparent hover:bg-accent/60",
       )}
     >
       <span
@@ -43,15 +46,25 @@ const SopRow = memo(function SopRow({
         )}
       >
         <span className="min-w-0">{sop.title ?? "Untitled"}</span>
-        {sop.mediaCount > 0 && (
-          <span
-            title={`${sop.mediaCount} image${sop.mediaCount === 1 ? "" : "s"}`}
-            className="mt-px flex shrink-0 items-center gap-0.5 text-[11px] font-normal tabular-nums text-muted-foreground"
-          >
-            <ImageIcon className="size-3" />
-            {sop.mediaCount}
-          </span>
-        )}
+        <span className="mt-px flex shrink-0 items-center gap-1.5">
+          {comeBack && (
+            <span
+              title="Marked come-back"
+              className="flex items-center text-amber-600 dark:text-amber-400"
+            >
+              <Flag className="size-3" />
+            </span>
+          )}
+          {sop.mediaCount > 0 && (
+            <span
+              title={`${sop.mediaCount} image${sop.mediaCount === 1 ? "" : "s"}`}
+              className="flex items-center gap-0.5 text-[11px] font-normal tabular-nums text-muted-foreground"
+            >
+              <ImageIcon className="size-3" />
+              {sop.mediaCount}
+            </span>
+          )}
+        </span>
       </span>
       <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
         <span className="font-mono text-muted-foreground/70">#{sop.id}</span>
