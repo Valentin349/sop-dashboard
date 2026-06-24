@@ -14,6 +14,17 @@ export interface KnowledgeBaseRow {
   // as a string for Python-dict-style rows, or a parsed object for valid-JSON rows.
   metafield: string | Record<string, unknown> | null;
   data_source: string | null;
+  // Tags. product_tags holds crm.products ids; the other two hold fixed enum strings.
+  product_tags: number[];
+  vehicle_tags: string[];
+  driver_status_tags: string[];
+}
+
+export interface ProductRow {
+  id: number;
+  name: string | null;
+  platform_id: number | null;
+  active: boolean | null;
 }
 
 // One media asset attached to a SOP. The object lives in a private storage bucket at

@@ -1,6 +1,7 @@
 import {
   listCategoriesByPlatform,
   listPlatforms,
+  listProducts,
   listSopsByCategory,
 } from "@/lib/sops/queries";
 import { Dashboard } from "@/components/dashboard";
@@ -26,9 +27,10 @@ export default async function Home({
 
   // Seed the initial view server-side so a deep link paints without a client fetch.
   // Everything after first load (category/SOP/platform switching) is client-driven + cached.
-  const [initialCategories, initialSops] = await Promise.all([
+  const [initialCategories, initialSops, initialProducts] = await Promise.all([
     platformId ? listCategoriesByPlatform(platformId) : Promise.resolve([]),
     categoryId ? listSopsByCategory(categoryId) : Promise.resolve([]),
+    platformId ? listProducts(platformId) : Promise.resolve([]),
   ]);
 
   return (
@@ -39,6 +41,7 @@ export default async function Home({
       initialSopId={toId(params.sop)}
       initialCategories={initialCategories}
       initialSops={initialSops}
+      initialProducts={initialProducts}
     />
   );
 }

@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 
 import type { CategoryWithCount } from "@/lib/sops/queries";
-import type { KnowledgeBaseRow, SopMedia } from "@/lib/sops/types";
+import type { KnowledgeBaseRow, ProductRow, SopMedia } from "@/lib/sops/types";
+import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
+import { TagToggleGroup } from "./tag-controls";
 
 type Mode = "edit" | "create";
 
@@ -21,6 +23,7 @@ export function SopEditor({
   platformId,
   categoryId,
   categories,
+  products,
   onCancel,
   onSaved,
   onDeleted,
@@ -30,6 +33,7 @@ export function SopEditor({
   platformId: number;
   categoryId: number | null;
   categories: CategoryWithCount[];
+  products: ProductRow[];
   onCancel: () => void;
   onSaved: (sop: KnowledgeBaseRow) => void;
   onDeleted: (id: number) => void;
@@ -40,6 +44,9 @@ export function SopEditor({
     sop?.category_id ?? categoryId ?? categories[0]?.id ?? null,
   );
   const [isComeBack, setIsComeBack] = useState(sop?.is_come_back ?? false);
+  const [productTags, setProductTags] = useState<number[]>(sop?.product_tags ?? []);
+  const [vehicleTags, setVehicleTags] = useState<string[]>(sop?.vehicle_tags ?? []);
+  const [statusTags, setStatusTags] = useState<string[]>(sop?.driver_status_tags ?? []);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +74,9 @@ export function SopEditor({
                 title,
                 content,
                 is_come_back: isComeBack,
+                product_tags: productTags,
+                vehicle_tags: vehicleTags,
+                driver_status_tags: statusTags,
               }),
             })
           : await fetch(`/api/sops/${sop!.id}`, {
@@ -77,6 +87,9 @@ export function SopEditor({
                 content,
                 category_id: catId,
                 is_come_back: isComeBack,
+                product_tags: productTags,
+                vehicle_tags: vehicleTags,
+                driver_status_tags: statusTags,
               }),
             });
       const data = await res.json();
@@ -197,6 +210,32 @@ export function SopEditor({
               className="w-full resize-y rounded-md border bg-background px-3 py-2 font-mono text-[13px] leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
             />
           </Field>
+
+          <p className="text-[12px] text-muted-foreground">
+            Leave a tag type empty to apply the SOP to <span className="font-medium">all</span>{" "}
+            of that type.
+          </p>
+          <TagToggleGroup
+            label="Product tags"
+            options={products.map((p) => ({ value: p.id, label: p.name ?? `#${p.id}` }))}
+            selected={productTags}
+            onChange={(next) => setProductTags(next as number[])}
+            emptyHint="No products for this platform."
+          />
+          <div className="flex flex-wrap gap-x-10 gap-y-6">
+            <TagToggleGroup
+              label="Vehicle tags"
+              options={VEHICLE_TAGS.map((v) => ({ value: v, label: v }))}
+              selected={vehicleTags}
+              onChange={(next) => setVehicleTags(next as string[])}
+            />
+            <TagToggleGroup
+              label="Driver status tags"
+              options={DRIVER_STATUS_TAGS.map((v) => ({ value: v, label: v }))}
+              selected={statusTags}
+              onChange={(next) => setStatusTags(next as string[])}
+            />
+          </div>
 
           <MediaManager mode={mode} sopId={sop?.id ?? null} />
         </div>

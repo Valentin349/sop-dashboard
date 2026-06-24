@@ -3,7 +3,8 @@
 import { Fragment, memo, useEffect, useState, type ReactNode } from "react";
 import { ChevronRight, ImageIcon, Pencil, Play } from "lucide-react";
 
-import type { KnowledgeBaseRow, SopMedia } from "@/lib/sops/types";
+import type { KnowledgeBaseRow, ProductRow, SopMedia } from "@/lib/sops/types";
+import { TagChips, type TagTone } from "./tag-controls";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,31 @@ function formatDate(iso: string | null): string {
     month: "long",
     year: "numeric",
   });
+}
+
+// Empty = the SOP applies to ALL of that dimension, shown explicitly so it isn't read as
+// "untagged / missing".
+function TagRow({
+  label,
+  items,
+  tone,
+}: {
+  label: string;
+  items: string[];
+  tone: TagTone;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-16 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      {items.length > 0 ? (
+        <TagChips items={items} tone={tone} />
+      ) : (
+        <span className="text-[12px] italic text-muted-foreground/70">All</span>
+      )}
+    </div>
+  );
 }
 
 // Turn bare URLs in plain-text content into clickable links, leaving everything else intact.
@@ -55,14 +81,19 @@ export const SopView = memo(function SopView({
   sop,
   platformName,
   categoryName,
+  products,
   onEdit,
 }: {
   sop: KnowledgeBaseRow;
   platformName: string;
   categoryName: string;
+  products: ProductRow[];
   onEdit?: () => void;
 }) {
   const created = formatDate(sop.created_at);
+  const productNames = sop.product_tags.map(
+    (id) => products.find((p) => p.id === id)?.name ?? `#${id}`,
+  );
 
   const [media, setMedia] = useState<SopMedia[] | null>(null);
   const [expanded, setExpanded] = useState<SopMedia | null>(null);
@@ -125,6 +156,12 @@ export const SopView = memo(function SopView({
                 </>
               )}
             </p>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <TagRow label="Products" items={productNames} tone="product" />
+              <TagRow label="Vehicle" items={sop.vehicle_tags} tone="vehicle" />
+              <TagRow label="Status" items={sop.driver_status_tags} tone="status" />
+            </div>
           </header>
 
           <div className="font-serif text-[1.05rem] leading-[1.75] whitespace-pre-wrap break-words text-foreground/90">

@@ -25,6 +25,14 @@ export async function PATCH(
   if (Number.isInteger(body.category_id)) patch.category_id = body.category_id;
   if (typeof body.is_come_back === "boolean") patch.is_come_back = body.is_come_back;
   if (typeof body.data_source === "string") patch.data_source = body.data_source;
+  if (Array.isArray(body.product_tags))
+    patch.product_tags = body.product_tags.map(Number).filter(Number.isInteger);
+  if (Array.isArray(body.vehicle_tags))
+    patch.vehicle_tags = body.vehicle_tags.filter((v: unknown) => typeof v === "string");
+  if (Array.isArray(body.driver_status_tags))
+    patch.driver_status_tags = body.driver_status_tags.filter(
+      (v: unknown) => typeof v === "string",
+    );
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no editable fields" }, { status: 400 });

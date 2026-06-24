@@ -6,6 +6,7 @@ import type {
   KnowledgeBaseMediaRow,
   KnowledgeBaseRow,
   PlatformRow,
+  ProductRow,
   SopMedia,
 } from "./types";
 
@@ -37,6 +38,20 @@ export function listPlatforms(): Promise<PlatformRow[]> {
   const db = getServerClient();
   return fetchAll<PlatformRow>((from, to) =>
     db.schema("public").from("platforms").select("*").order("id").range(from, to),
+  );
+}
+
+// Product tag options for a platform. Live source for resolving product_tags ids → names.
+export function listProducts(platformId: number): Promise<ProductRow[]> {
+  const db = getServerClient();
+  return fetchAll<ProductRow>((from, to) =>
+    db
+      .schema("crm")
+      .from("products")
+      .select("id,name,platform_id,active")
+      .eq("platform_id", platformId)
+      .order("name")
+      .range(from, to),
   );
 }
 

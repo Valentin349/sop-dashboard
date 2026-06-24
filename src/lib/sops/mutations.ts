@@ -71,6 +71,9 @@ export interface SopPatch {
   category_id?: number;
   is_come_back?: boolean;
   data_source?: string;
+  product_tags?: number[];
+  vehicle_tags?: string[];
+  driver_status_tags?: string[];
 }
 
 export async function updateSop(
@@ -95,6 +98,9 @@ export interface NewSop {
   content: string;
   is_come_back?: boolean;
   data_source?: string;
+  product_tags?: number[];
+  vehicle_tags?: string[];
+  driver_status_tags?: string[];
 }
 
 export async function createSop(fields: NewSop): Promise<KnowledgeBaseRow> {
@@ -108,6 +114,9 @@ export async function createSop(fields: NewSop): Promise<KnowledgeBaseRow> {
       content: fields.content,
       is_come_back: fields.is_come_back ?? false,
       data_source: fields.data_source ?? "human",
+      product_tags: fields.product_tags ?? [],
+      vehicle_tags: fields.vehicle_tags ?? [],
+      driver_status_tags: fields.driver_status_tags ?? [],
     })
     .select("*")
     .single();

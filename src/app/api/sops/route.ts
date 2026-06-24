@@ -36,6 +36,15 @@ export async function POST(req: Request) {
       content,
       is_come_back: Boolean(body?.is_come_back),
       data_source: typeof body?.data_source === "string" ? body.data_source : undefined,
+      product_tags: Array.isArray(body?.product_tags)
+        ? body.product_tags.map(Number).filter(Number.isInteger)
+        : [],
+      vehicle_tags: Array.isArray(body?.vehicle_tags)
+        ? body.vehicle_tags.filter((v: unknown) => typeof v === "string")
+        : [],
+      driver_status_tags: Array.isArray(body?.driver_status_tags)
+        ? body.driver_status_tags.filter((v: unknown) => typeof v === "string")
+        : [],
     });
     return NextResponse.json({ sop }, { status: 201 });
   } catch (e) {

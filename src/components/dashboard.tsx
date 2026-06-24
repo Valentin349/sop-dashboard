@@ -4,7 +4,12 @@ import { useCallback, useRef, useState } from "react";
 import { FileText, Plus, RefreshCw } from "lucide-react";
 
 import type { CategoryWithCount, SopWithMediaCount } from "@/lib/sops/queries";
-import type { CategoryRow, KnowledgeBaseRow, PlatformRow } from "@/lib/sops/types";
+import type {
+  CategoryRow,
+  KnowledgeBaseRow,
+  PlatformRow,
+  ProductRow,
+} from "@/lib/sops/types";
 import { sopHref } from "@/lib/sops/nav";
 import { cn } from "@/lib/utils";
 import { PlatformSwitcher } from "./platform-switcher";
@@ -25,6 +30,7 @@ export function Dashboard({
   initialSopId,
   initialCategories,
   initialSops,
+  initialProducts,
 }: {
   platforms: PlatformRow[];
   initialPlatformId: number | null;
@@ -32,6 +38,7 @@ export function Dashboard({
   initialSopId: number | null;
   initialCategories: CategoryWithCount[];
   initialSops: SopWithMediaCount[];
+  initialProducts: ProductRow[];
 }) {
   const [platformId, setPlatformId] = useState(initialPlatformId);
   const [categoryId, setCategoryId] = useState(initialCategoryId);
@@ -52,13 +59,19 @@ export function Dashboard({
   );
   const [catLoading, setCatLoading] = useState(false);
   const [sopLoading, setSopLoading] = useState(false);
+  // Product tag options per platform (for tagging, display, and filtering).
+  const [productCache, setProductCache] = useState<Record<number, ProductRow[]>>(
+    initialPlatformId != null ? { [initialPlatformId]: initialProducts } : {},
+  );
 
   // Ref mirrors of the caches so the fetch callbacks can check "already cached?" without
   // depending on cache state — keeping their identity (and the children's props) stable.
   const catCacheRef = useRef(catCache);
   const sopCacheRef = useRef(sopCache);
+  const productCacheRef = useRef(productCache);
   catCacheRef.current = catCache;
   sopCacheRef.current = sopCache;
+  productCacheRef.current = productCache;
 
   // Track the latest selection so out-of-order fetch responses don't clobber loading state.
   const curPlatform = useRef(platformId);
@@ -94,6 +107,13 @@ export function Dashboard({
     }
   }, []);
 
+  const fetchProducts = useCallback(async (pid: number, force = false) => {
+    if (!force && productCacheRef.current[pid]) return;
+    const res = await fetch(`/api/products?platform=${pid}`, { cache: "no-store" });
+    const data = await res.json();
+    setProductCache((c) => ({ ...c, [pid]: data.products ?? [] }));
+  }, []);
+
   const selectPlatform = useCallback(
     (pid: number) => {
       curPlatform.current = pid;
@@ -105,8 +125,9 @@ export function Dashboard({
       setCreating(false);
       syncUrl(pid, null, null);
       void fetchCategories(pid);
+      void fetchProducts(pid);
     },
-    [syncUrl, fetchCategories],
+    [syncUrl, fetchCategories, fetchProducts],
   );
 
   const selectCategory = useCallback(
@@ -222,6 +243,7 @@ export function Dashboard({
 
   const categories = platformId != null ? catCache[platformId] : undefined;
   const sops = categoryId != null ? sopCache[categoryId] : undefined;
+  const products = (platformId != null ? productCache[platformId] : undefined) ?? [];
   const selectedSop = sops?.find((s) => s.id === sopId) ?? null;
   const platformName = platforms.find((p) => p.id === platformId)?.name ?? "Platform";
   const categoryName =
@@ -308,7 +330,12 @@ export function Dashboard({
               </div>
             </div>
             {sops ? (
-              <SopList sops={sops} selectedId={sopId} onSelect={selectSop} />
+              <SopList
+                sops={sops}
+                selectedId={sopId}
+                onSelect={selectSop}
+                products={products}
+              />
             ) : (
               <SopListSkeleton />
             )}
@@ -325,6 +352,7 @@ export function Dashboard({
             platformId={platformId}
             categoryId={categoryId}
             categories={categories ?? []}
+            products={products}
             onCancel={cancelEdit}
             onSaved={onSopSaved}
             onDeleted={onSopDeleted}
@@ -336,6 +364,7 @@ export function Dashboard({
             platformId={platformId}
             categoryId={categoryId}
             categories={categories ?? []}
+            products={products}
             onCancel={cancelEdit}
             onSaved={onSopSaved}
             onDeleted={onSopDeleted}
@@ -345,6 +374,7 @@ export function Dashboard({
             sop={selectedSop}
             platformName={platformName}
             categoryName={categoryName}
+            products={products}
             onEdit={startEdit}
           />
         ) : (
