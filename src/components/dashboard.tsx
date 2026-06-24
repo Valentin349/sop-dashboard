@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, Plus, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FileText, LogOut, Plus, RefreshCw } from "lucide-react";
+
+import type { Role } from "@/lib/auth/session";
 
 import type { CategoryWithCount, SopWithMediaCount } from "@/lib/sops/queries";
 import type {
@@ -12,6 +15,7 @@ import type {
 } from "@/lib/sops/types";
 import { sopHref } from "@/lib/sops/nav";
 import { cn } from "@/lib/utils";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { PlatformSwitcher } from "./platform-switcher";
 import { CategoryNav } from "./category-nav";
 import { SopList } from "./sop-list";
@@ -37,6 +41,8 @@ export function Dashboard({
   initialCategories,
   initialSops,
   initialProducts,
+  role,
+  username,
 }: {
   platforms: PlatformRow[];
   initialPlatformId: number | null;
@@ -45,7 +51,18 @@ export function Dashboard({
   initialCategories: CategoryWithCount[];
   initialSops: SopWithMediaCount[];
   initialProducts: ProductRow[];
+  role: Role;
+  username: string;
 }) {
+  const isAdmin = role === "admin";
+  const router = useRouter();
+
+  async function logout() {
+    const supabase = createBrowserSupabase();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }
   const [platformId, setPlatformId] = useState(initialPlatformId);
   const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [sopId, setSopId] = useState(initialSopId);
@@ -306,7 +323,7 @@ export function Dashboard({
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Categories
             </p>
-            {platformId != null && (
+            {isAdmin && platformId != null && (
               <button
                 type="button"
                 onClick={openCreateCategory}
@@ -323,11 +340,26 @@ export function Dashboard({
               categories={categories}
               currentCategoryId={categoryId}
               onSelect={selectCategory}
-              onEdit={openEditCategory}
+              onEdit={isAdmin ? openEditCategory : undefined}
             />
           ) : catLoading ? (
             <CategoryNavSkeleton />
           ) : null}
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t p-3">
+          <div className="min-w-0">
+            <p className="truncate text-[12px] font-medium">{username}</p>
+            <p className="text-[11px] capitalize text-muted-foreground">{role}</p>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            title="Sign out"
+            aria-label="Sign out"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <LogOut className="size-4" />
+          </button>
         </div>
       </aside>
 
@@ -348,15 +380,17 @@ export function Dashboard({
                 <span className="mr-1 text-[11px] tabular-nums text-muted-foreground">
                   {sops?.length ?? ""}
                 </span>
-                <button
-                  type="button"
-                  onClick={startCreate}
-                  title="New SOP"
-                  aria-label="New SOP"
-                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <Plus className="size-4" />
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={startCreate}
+                    title="New SOP"
+                    aria-label="New SOP"
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={refresh}
@@ -424,7 +458,7 @@ export function Dashboard({
             platformName={platformName}
             categoryName={categoryName}
             products={products}
-            onEdit={startEdit}
+            onEdit={isAdmin ? startEdit : undefined}
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-12 text-center">

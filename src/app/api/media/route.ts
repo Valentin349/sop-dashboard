@@ -7,6 +7,7 @@ import {
   updateMediaDescription,
   uploadSopMedia,
 } from "@/lib/sops/mutations";
+import { requireApi } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const g = await requireApi(true);
+  if (g.error) return g.error;
   const form = await req.formData().catch(() => null);
   const sop = Number(form?.get("sop"));
   const file = form?.get("file");
@@ -42,6 +45,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const g = await requireApi(true);
+  if (g.error) return g.error;
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (!Number.isInteger(id)) {
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
@@ -55,6 +60,8 @@ export async function DELETE(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const g = await requireApi(true);
+  if (g.error) return g.error;
   const body = await req.json().catch(() => null);
   try {
     if (Array.isArray(body?.order)) {

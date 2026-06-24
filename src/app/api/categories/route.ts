@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { listCategoriesByPlatform } from "@/lib/sops/queries";
 import { createCategory } from "@/lib/sops/mutations";
+import { requireApi } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const g = await requireApi(true);
+  if (g.error) return g.error;
   const body = await req.json().catch(() => null);
   const platform_id = Number(body?.platform_id);
   const name = typeof body?.name === "string" ? body.name.trim() : "";

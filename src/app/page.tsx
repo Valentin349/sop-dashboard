@@ -1,9 +1,12 @@
+import { redirect } from "next/navigation";
+
 import {
   listCategoriesByPlatform,
   listPlatforms,
   listProducts,
   listSopsByCategory,
 } from "@/lib/sops/queries";
+import { getCurrentUser, hasAccess } from "@/lib/auth/session";
 import { Dashboard } from "@/components/dashboard";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +22,10 @@ export default async function Home({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const user = await getCurrentUser();
+  if (!user || !hasAccess(user.role)) redirect("/login");
+  const role = user.role ?? "viewer";
+
   const params = await searchParams;
 
   const platforms = await listPlatforms();
@@ -42,6 +49,8 @@ export default async function Home({
       initialCategories={initialCategories}
       initialSops={initialSops}
       initialProducts={initialProducts}
+      role={role}
+      username={user.email ?? "Account"}
     />
   );
 }

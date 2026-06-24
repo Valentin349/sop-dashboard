@@ -15,7 +15,7 @@ export const CategoryNav = memo(function CategoryNav({
   categories: CategoryWithCount[];
   currentCategoryId: number | null;
   onSelect: (categoryId: number) => void;
-  onEdit: (category: CategoryWithCount) => void;
+  onEdit?: (category: CategoryWithCount) => void;
 }) {
   if (categories.length === 0) {
     return (
@@ -61,15 +61,17 @@ export const CategoryNav = memo(function CategoryNav({
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => onEdit(cat)}
-              title="Edit category"
-              aria-label="Edit category"
-              className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-            >
-              <Pencil className="size-3" />
-            </button>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(cat)}
+                title="Edit category"
+                aria-label="Edit category"
+                className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+              >
+                <Pencil className="size-3" />
+              </button>
+            )}
           </div>
         );
       })}

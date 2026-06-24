@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { deleteSop, updateSop, type SopPatch } from "@/lib/sops/mutations";
+import { requireApi } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const g = await requireApi(true);
+  if (g.error) return g.error;
   const id = parseId(await ctx.params);
   if (id == null) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
@@ -50,6 +53,8 @@ export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const g = await requireApi(true);
+  if (g.error) return g.error;
   const id = parseId(await ctx.params);
   if (id == null) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
