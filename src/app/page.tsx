@@ -4,7 +4,6 @@ import {
   listCategoriesByPlatform,
   listPlatforms,
   listProducts,
-  listSopsByCategory,
 } from "@/lib/sops/queries";
 import { getCurrentUser, hasAccess } from "@/lib/auth/session";
 import { Dashboard } from "@/components/dashboard";
@@ -32,11 +31,11 @@ export default async function Home({
   const platformId = toId(params.platform) ?? platforms[0]?.id ?? null;
   const categoryId = toId(params.category);
 
-  // Seed the initial view server-side so a deep link paints without a client fetch.
-  // Everything after first load (category/SOP/platform switching) is client-driven + cached.
-  const [initialCategories, initialSops, initialProducts] = await Promise.all([
+  // Seed the lightweight shell (categories + products) server-side so it paints instantly. The
+  // SOP corpus is large (full content, for client-side search), so it's fetched client-side in
+  // the background instead of blocking first paint — see Dashboard's mount effect.
+  const [initialCategories, initialProducts] = await Promise.all([
     platformId ? listCategoriesByPlatform(platformId) : Promise.resolve([]),
-    categoryId ? listSopsByCategory(categoryId) : Promise.resolve([]),
     platformId ? listProducts(platformId) : Promise.resolve([]),
   ]);
 
@@ -47,7 +46,6 @@ export default async function Home({
       initialCategoryId={categoryId}
       initialSopId={toId(params.sop)}
       initialCategories={initialCategories}
-      initialSops={initialSops}
       initialProducts={initialProducts}
       role={role}
       username={user.email ?? "Account"}

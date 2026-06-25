@@ -93,43 +93,32 @@ export async function listCategoriesByPlatform(
 
 export type SopWithMediaCount = KnowledgeBaseRow & { mediaCount: number };
 
-// SOPs in one category. Includes content so the list can show a preview line and the full
-// view can render instantly client-side without re-fetching per SOP click. Each SOP is
-// annotated with its attachment count (from knowledge_base_media) so the list can badge it.
-export async function listSopsByCategory(
-  categoryId: number,
+// All SOPs for a platform (every category) — the single corpus the dashboard caches. The
+// category list and the platform-wide search both derive from this client-side, so it includes
+// content (search matches the body). Each SOP's attachment count comes from an embedded
+// aggregate (`knowledge_base_media(count)`) — one round trip, counted in the DB, no table scan.
+type SopRowWithMediaAgg = KnowledgeBaseRow & {
+  knowledge_base_media: { count: number }[] | null;
+};
+
+export async function listSopsByPlatform(
+  platformId: number,
 ): Promise<SopWithMediaCount[]> {
   const db = getServerClient();
 
-  const sops = await fetchAll<KnowledgeBaseRow>((from, to) =>
+  const sops = await fetchAll<SopRowWithMediaAgg>((from, to) =>
     db
       .from("knowledge_base")
-      .select("*")
-      .eq("category_id", categoryId)
+      .select("*, knowledge_base_media(count)")
+      .eq("platform_id", platformId)
       .order("title")
       .range(from, to),
   );
 
-  const counts = new Map<number, number>();
-  const ids = sops.map((s) => s.id);
-  if (ids.length > 0) {
-    const mediaKeys = await fetchAll<Pick<KnowledgeBaseMediaRow, "knowledge_base_id">>(
-      (from, to) =>
-        db
-          .from("knowledge_base_media")
-          .select("knowledge_base_id")
-          .in("knowledge_base_id", ids)
-          .range(from, to),
-    );
-    for (const row of mediaKeys) {
-      counts.set(
-        row.knowledge_base_id,
-        (counts.get(row.knowledge_base_id) ?? 0) + 1,
-      );
-    }
-  }
-
-  return sops.map((s) => ({ ...s, mediaCount: counts.get(s.id) ?? 0 }));
+  return sops.map(({ knowledge_base_media, ...s }) => ({
+    ...s,
+    mediaCount: knowledge_base_media?.[0]?.count ?? 0,
+  }));
 }
 
 export async function getCategory(id: number | string): Promise<CategoryRow | null> {

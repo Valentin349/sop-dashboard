@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 
-import { listSopsByCategory } from "@/lib/sops/queries";
+import { listSopsByPlatform } from "@/lib/sops/queries";
 import { createSop } from "@/lib/sops/mutations";
 import { requireApi } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
+// ?platform=<id> → every SOP on the platform. This is the single corpus the dashboard caches;
+// category views and search both derive from it client-side.
 export async function GET(req: Request) {
-  const category = Number(new URL(req.url).searchParams.get("category"));
-  if (!Number.isInteger(category)) {
-    return NextResponse.json({ error: "invalid category" }, { status: 400 });
+  const platform = Number(new URL(req.url).searchParams.get("platform"));
+  if (!Number.isInteger(platform)) {
+    return NextResponse.json({ error: "invalid platform" }, { status: 400 });
   }
-  const sops = await listSopsByCategory(category);
+  const sops = await listSopsByPlatform(platform);
   return NextResponse.json({ sops });
 }
 
