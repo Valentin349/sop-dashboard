@@ -41,7 +41,7 @@ const SopRow = memo(function SopRow({
           ? "border-foreground bg-accent"
           : comeBack
             ? "border-amber-400/80 bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-400/10 dark:hover:bg-amber-400/[0.16]"
-            : "border-transparent hover:bg-accent/60",
+            : "border-transparent hover:bg-muted-foreground/20",
       )}
     >
       <span

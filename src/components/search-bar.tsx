@@ -37,6 +37,7 @@ export function SearchBar({
   active: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [isMac, setIsMac] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const activeFilters =
@@ -45,6 +46,25 @@ export function SearchBar({
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad|iPod/.test(navigator.platform));
   }, []);
+
+  // The filter panel is an overlay — close it on outside click or Escape.
+  useEffect(() => {
+    if (!showFilters) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setShowFilters(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowFilters(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [showFilters]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -65,8 +85,8 @@ export function SearchBar({
   }
 
   return (
-    <div className="border-b bg-background">
-      <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-3 py-2.5">
+    <div ref={rootRef} className="relative mx-auto w-full max-w-2xl">
+      <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -104,8 +124,9 @@ export function SearchBar({
         )}
       </div>
 
+      {/* Filter panel overlays as an absolute dropdown so it never pushes page content down. */}
       {showFilters && (
-        <div className="mx-auto w-full max-w-2xl space-y-3 px-3 pb-3">
+        <div className="absolute inset-x-0 top-full z-50 mt-2 space-y-3 rounded-lg border bg-popover p-3 text-popover-foreground shadow-md">
           <TagToggleGroup
             label="Products"
             options={products.map((p) => ({ value: p.id, label: p.name ?? `#${p.id}` }))}

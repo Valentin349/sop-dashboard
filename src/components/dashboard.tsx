@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { FileText, LogOut, Plus, RefreshCw } from "lucide-react";
+import { FileText, Plus, RefreshCw } from "lucide-react";
 
 import type { Role } from "@/lib/auth/session";
 
@@ -15,7 +14,7 @@ import type {
 } from "@/lib/sops/types";
 import { sopHref } from "@/lib/sops/nav";
 import { cn } from "@/lib/utils";
-import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { TopBarCenter } from "./top-bar-center";
 import { PlatformSwitcher } from "./platform-switcher";
 import { CategoryNav } from "./category-nav";
 import { SearchBar } from "./search-bar";
@@ -42,7 +41,6 @@ export function Dashboard({
   initialCategories,
   initialProducts,
   role,
-  username,
 }: {
   platforms: PlatformRow[];
   initialPlatformId: number | null;
@@ -51,17 +49,9 @@ export function Dashboard({
   initialCategories: CategoryWithCount[];
   initialProducts: ProductRow[];
   role: Role;
-  username: string;
 }) {
   const isAdmin = role === "admin";
-  const router = useRouter();
 
-  async function logout() {
-    const supabase = createBrowserSupabase();
-    await supabase.auth.signOut();
-    router.replace("/login");
-    router.refresh();
-  }
   const [platformId, setPlatformId] = useState(initialPlatformId);
   const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [sopId, setSopId] = useState(initialSopId);
@@ -398,14 +388,26 @@ export function Dashboard({
     categories?.find((c) => c.id === categoryId)?.name ?? "Category";
 
   return (
-    <div className="flex h-screen overflow-hidden text-foreground">
+    <div className="flex h-full overflow-hidden text-foreground">
+      {/* Search bar is portaled up into the persistent top bar. */}
+      <TopBarCenter>
+        <SearchBar
+          query={query}
+          onQueryChange={setQuery}
+          products={products}
+          productFilter={productFilter}
+          vehicleFilter={vehicleFilter}
+          statusFilter={statusFilter}
+          onProductFilter={setProductFilter}
+          onVehicleFilter={setVehicleFilter}
+          onStatusFilter={setStatusFilter}
+          resultCount={displayedSops.length}
+          active={platformMode}
+        />
+      </TopBarCenter>
       {/* Column 1 — platform + categories */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-sidebar">
         <div className="space-y-3 p-3">
-          <div className="px-1 pt-1">
-            <p className="text-sm font-semibold tracking-tight">SOP Dashboard</p>
-            <p className="text-[11px] text-muted-foreground">Knowledge base</p>
-          </div>
           <PlatformSwitcher
             platforms={platforms}
             currentId={platformId}
@@ -439,21 +441,6 @@ export function Dashboard({
           ) : catLoading ? (
             <CategoryNavSkeleton />
           ) : null}
-        </div>
-        <div className="flex items-center justify-between gap-2 border-t p-3">
-          <div className="min-w-0">
-            <p className="truncate text-[12px] font-medium">{username}</p>
-            <p className="text-[11px] capitalize text-muted-foreground">{role}</p>
-          </div>
-          <button
-            type="button"
-            onClick={logout}
-            title="Sign out"
-            aria-label="Sign out"
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <LogOut className="size-4" />
-          </button>
         </div>
       </aside>
 
@@ -523,21 +510,8 @@ export function Dashboard({
         className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-ring/60 active:bg-ring"
       />
 
-      {/* Column 3 — platform-wide search bar above the SOP view / editor */}
+      {/* Column 3 — the SOP view / editor (search lives in the top bar) */}
       <section className="flex min-w-0 flex-1 flex-col bg-background">
-        <SearchBar
-          query={query}
-          onQueryChange={setQuery}
-          products={products}
-          productFilter={productFilter}
-          vehicleFilter={vehicleFilter}
-          statusFilter={statusFilter}
-          onProductFilter={setProductFilter}
-          onVehicleFilter={setVehicleFilter}
-          onStatusFilter={setStatusFilter}
-          resultCount={displayedSops.length}
-          active={platformMode}
-        />
         <div className="min-h-0 flex-1">
         {creating && platformId != null ? (
           <SopEditor

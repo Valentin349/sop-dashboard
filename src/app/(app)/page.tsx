@@ -48,7 +48,6 @@ export default async function Home({
       initialCategories={initialCategories}
       initialProducts={initialProducts}
       role={role}
-      username={user.email ?? "Account"}
     />
   );
 }
