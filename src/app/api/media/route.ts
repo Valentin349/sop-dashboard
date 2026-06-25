@@ -31,14 +31,14 @@ export async function POST(req: Request) {
   }
   const description = form?.get("description");
   try {
-    await uploadSopMedia({
+    const row = await uploadSopMedia({
       sopId: sop,
       body: await file.arrayBuffer(),
       contentType: file.type || "application/octet-stream",
       originalName: file.name,
       description: typeof description === "string" && description ? description : null,
     });
-    return NextResponse.json({ ok: true }, { status: 201 });
+    return NextResponse.json({ ok: true, media: row.id }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
   }

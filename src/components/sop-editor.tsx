@@ -17,6 +17,26 @@ import { TagToggleGroup } from "./tag-controls";
 
 type Mode = "edit" | "create";
 
+// A media item as the editor holds it before anything is written to the DB. Existing items carry
+// a DB `id` and a signed `url`; freshly added items carry the local `file` + an object-URL preview
+// and have `id: null` until they're uploaded on Save.
+type StagedMedia = {
+  key: string;
+  id: number | null;
+  file: File | null;
+  url: string;
+  mediaType: "image" | "video";
+  description: string;
+};
+
+// Route handlers return { error } JSON on failure (incl. 401/403 from the auth gate). Turn a
+// non-2xx response into a thrown Error so callers surface it instead of silently doing nothing.
+async function failIfNotOk(res: Response, fallback: string) {
+  if (res.ok) return;
+  const data = await res.json().catch(() => null);
+  throw new Error(data?.error ?? `${fallback} (${res.status})`);
+}
+
 export function SopEditor({
   mode,
   sop,
@@ -51,6 +71,134 @@ export function SopEditor({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Media staging -------------------------------------------------------------------------
+  // The editor edits media purely in local state; nothing is written until Save (see commitMedia).
+  const [media, setMedia] = useState<StagedMedia[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  // Existing rows the user removed in this session — deleted from the DB on Save.
+  const [removedIds, setRemovedIds] = useState<number[]>([]);
+  // Original captions of loaded rows, so Save only PATCHes the ones actually edited.
+  const originalDesc = useRef<Map<number, string>>(new Map());
+  // Object URLs minted for previews; revoked on unmount.
+  const objectUrls = useRef<string[]>([]);
+  const keySeq = useRef(0);
+
+  // Load existing media for the SOP being edited.
+  useEffect(() => {
+    if (sop?.id == null) return;
+    let cancelled = false;
+    setMediaLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/media?sop=${sop.id}`, { cache: "no-store" });
+        await failIfNotOk(res, "Failed to load media");
+        const data = await res.json();
+        if (cancelled) return;
+        const items: StagedMedia[] = (data.media ?? []).map((m: SopMedia) => ({
+          key: `db-${m.id}`,
+          id: m.id,
+          file: null,
+          url: m.url,
+          mediaType: m.mediaType === "video" ? "video" : "image",
+          description: m.description ?? "",
+        }));
+        originalDesc.current = new Map(items.map((it) => [it.id as number, it.description]));
+        setMedia(items);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setMediaLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sop?.id]);
+
+  useEffect(() => () => objectUrls.current.forEach(URL.revokeObjectURL), []);
+
+  function addFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const added = Array.from(files).map((file) => {
+      const url = URL.createObjectURL(file);
+      objectUrls.current.push(url);
+      return {
+        key: `new-${keySeq.current++}`,
+        id: null,
+        file,
+        url,
+        mediaType: file.type.startsWith("video") ? "video" : "image",
+        description: "",
+      } satisfies StagedMedia;
+    });
+    setMedia((prev) => [...prev, ...added]);
+  }
+
+  function removeItem(key: string) {
+    setMedia((prev) => {
+      const item = prev.find((m) => m.key === key);
+      if (item?.id != null) setRemovedIds((ids) => [...ids, item.id as number]);
+      if (item?.file) URL.revokeObjectURL(item.url);
+      return prev.filter((m) => m.key !== key);
+    });
+  }
+
+  function setDescription(key: string, description: string) {
+    setMedia((prev) => prev.map((m) => (m.key === key ? { ...m, description } : m)));
+  }
+
+  function moveItem(i: number, dir: -1 | 1) {
+    setMedia((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+
+  // Apply the staged media changes to the DB for the (now-saved) SOP: delete removed rows, upload
+  // new files (with their captions), patch edited captions, then persist the on-screen order.
+  async function commitMedia(sopId: number) {
+    for (const id of removedIds) {
+      const res = await fetch(`/api/media?id=${id}`, { method: "DELETE" });
+      await failIfNotOk(res, "Removing media failed");
+    }
+
+    const finalIds: number[] = [];
+    for (const item of media) {
+      if (item.file) {
+        const form = new FormData();
+        form.set("sop", String(sopId));
+        form.set("file", item.file);
+        form.set("description", item.description);
+        const res = await fetch("/api/media", { method: "POST", body: form });
+        await failIfNotOk(res, "Upload failed");
+        const data = await res.json();
+        finalIds.push(Number(data.media));
+      } else if (item.id != null) {
+        if (originalDesc.current.get(item.id) !== item.description) {
+          const res = await fetch("/api/media", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: item.id, description: item.description }),
+          });
+          await failIfNotOk(res, "Saving caption failed");
+        }
+        finalIds.push(item.id);
+      }
+    }
+
+    if (finalIds.length > 1) {
+      const res = await fetch("/api/media", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: finalIds }),
+      });
+      await failIfNotOk(res, "Reordering media failed");
+    }
+  }
+
   async function save() {
     setError(null);
     if (!title.trim()) {
@@ -59,6 +207,10 @@ export function SopEditor({
     }
     if (catId == null) {
       setError("Pick a category.");
+      return;
+    }
+    if (media.some((m) => !m.description.trim())) {
+      setError("Add a description to every media item before saving.");
       return;
     }
     setSaving(true);
@@ -94,6 +246,7 @@ export function SopEditor({
             });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
+      await commitMedia((data.sop as KnowledgeBaseRow).id);
       onSaved(data.sop);
     } catch (e) {
       setError((e as Error).message);
@@ -237,7 +390,16 @@ export function SopEditor({
             />
           </div>
 
-          <MediaManager mode={mode} sopId={sop?.id ?? null} />
+          <MediaManager
+            mode={mode}
+            items={media}
+            loading={mediaLoading}
+            disabled={saving || deleting}
+            onAdd={addFiles}
+            onRemove={removeItem}
+            onDescription={setDescription}
+            onMove={moveItem}
+          />
         </div>
       </div>
     </div>
@@ -263,30 +425,30 @@ function Field({
   );
 }
 
-// Media is attached to an existing SOP, so it can only be managed after a SOP exists.
-// In create mode we show a hint instead. Each op hits the server immediately.
-function MediaManager({ mode, sopId }: { mode: Mode; sopId: number | null }) {
-  const [media, setMedia] = useState<SopMedia[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+// Staging UI only. Every change edits the parent's local state; the DB write happens on Save.
+// Media attaches to an existing SOP, so in create mode we show a hint until the SOP is saved once.
+function MediaManager({
+  mode,
+  items,
+  loading,
+  disabled,
+  onAdd,
+  onRemove,
+  onDescription,
+  onMove,
+}: {
+  mode: Mode;
+  items: StagedMedia[];
+  loading: boolean;
+  disabled: boolean;
+  onAdd: (files: FileList | null) => void;
+  onRemove: (key: string) => void;
+  onDescription: (key: string, description: string) => void;
+  onMove: (i: number, dir: -1 | 1) => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = async (id: number) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/media?sop=${id}`, { cache: "no-store" });
-      const data = await res.json();
-      setMedia(data.media ?? []);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (sopId != null) void load(sopId);
-  }, [sopId]);
-
-  if (mode === "create" || sopId == null) {
+  if (mode === "create") {
     return (
       <Field label="Media">
         <p className="rounded-md border border-dashed px-3 py-4 text-[13px] text-muted-foreground">
@@ -296,68 +458,17 @@ function MediaManager({ mode, sopId }: { mode: Mode; sopId: number | null }) {
     );
   }
 
-  async function upload(files: FileList | null) {
-    if (!files || files.length === 0 || sopId == null) return;
-    setBusy(true);
-    try {
-      for (const file of Array.from(files)) {
-        const form = new FormData();
-        form.set("sop", String(sopId));
-        form.set("file", file);
-        await fetch("/api/media", { method: "POST", body: form });
-      }
-      await load(sopId);
-    } finally {
-      setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-
-  async function del(id: number) {
-    if (sopId == null) return;
-    setBusy(true);
-    try {
-      await fetch(`/api/media?id=${id}`, { method: "DELETE" });
-      await load(sopId);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function move(i: number, dir: -1 | 1) {
-    const j = i + dir;
-    if (j < 0 || j >= media.length) return;
-    const next = [...media];
-    [next[i], next[j]] = [next[j], next[i]];
-    setMedia(next);
-    setBusy(true);
-    try {
-      await fetch("/api/media", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: next.map((m) => m.id) }),
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveDescription(id: number, description: string) {
-    await fetch("/api/media", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, description }),
-    });
-  }
-
   return (
-    <Field label={`Media${media.length ? ` (${media.length})` : ""}`}>
+    <Field label={`Media${items.length ? ` (${items.length})` : ""}`}>
       <div className="space-y-2">
+        <p className="text-[12px] text-muted-foreground">
+          Changes are saved to the database when you click Save. Every item needs a description.
+        </p>
         {loading ? (
           <p className="text-[13px] text-muted-foreground">Loading media…</p>
         ) : (
-          media.map((m, i) => (
-            <div key={m.id} className="flex gap-3 rounded-md border p-2">
+          items.map((m, i) => (
+            <div key={m.key} className="flex gap-3 rounded-md border p-2">
               <div className="size-20 shrink-0 overflow-hidden rounded bg-muted">
                 {m.mediaType === "video" ? (
                   <video src={m.url} className="h-full w-full object-cover" muted />
@@ -367,17 +478,17 @@ function MediaManager({ mode, sopId }: { mode: Mode; sopId: number | null }) {
                 )}
               </div>
               <textarea
-                defaultValue={m.description ?? ""}
-                onBlur={(e) => void saveDescription(m.id, e.target.value)}
+                value={m.description}
+                onChange={(e) => onDescription(m.key, e.target.value)}
                 rows={2}
-                placeholder="Caption (saved on blur)"
+                placeholder="Description (required)"
                 className="min-w-0 flex-1 resize-y rounded border bg-background px-2 py-1.5 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
               />
               <div className="flex shrink-0 flex-col gap-1">
                 <button
                   type="button"
-                  onClick={() => move(i, -1)}
-                  disabled={busy || i === 0}
+                  onClick={() => onMove(i, -1)}
+                  disabled={disabled || i === 0}
                   title="Move up"
                   className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-30"
                 >
@@ -385,8 +496,8 @@ function MediaManager({ mode, sopId }: { mode: Mode; sopId: number | null }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => move(i, 1)}
-                  disabled={busy || i === media.length - 1}
+                  onClick={() => onMove(i, 1)}
+                  disabled={disabled || i === items.length - 1}
                   title="Move down"
                   className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-30"
                 >
@@ -394,8 +505,8 @@ function MediaManager({ mode, sopId }: { mode: Mode; sopId: number | null }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => del(m.id)}
-                  disabled={busy}
+                  onClick={() => onRemove(m.key)}
+                  disabled={disabled}
                   title="Remove"
                   className="rounded p-1 text-destructive hover:bg-destructive/10 disabled:opacity-50"
                 >
@@ -411,16 +522,19 @@ function MediaManager({ mode, sopId }: { mode: Mode; sopId: number | null }) {
           type="file"
           accept="image/*,video/*"
           multiple
-          onChange={(e) => void upload(e.target.files)}
+          onChange={(e) => {
+            onAdd(e.target.files);
+            if (fileRef.current) fileRef.current.value = "";
+          }}
           className="hidden"
         />
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          disabled={busy}
+          disabled={disabled}
           className="inline-flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
+          <ImagePlus className="size-3.5" />
           Add image or video
         </button>
       </div>

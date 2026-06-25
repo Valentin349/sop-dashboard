@@ -250,7 +250,7 @@ export function Dashboard({
   const cancelEdit = useCallback(() => {
     setEditing(false);
     setCreating(false);
-    reload(); // media may have changed via the editor's immediate ops
+    reload(); // staged media edits are discarded on cancel; refresh in case the DB changed elsewhere
   }, [reload]);
 
   const onSopSaved = useCallback(
