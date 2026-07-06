@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookText } from "lucide-react";
+import { BarChart3, BookText, ClipboardList } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/", label: "Knowledge base", icon: BookText },
+  { href: "/issues", label: "Issue lists", icon: ClipboardList },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
 ] as const;
 
