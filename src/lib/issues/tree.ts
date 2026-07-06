@@ -45,10 +45,9 @@ function valueAt(issue: IssueRow, level: number): string | null {
   );
 }
 
-// An issue's display name: an explicit name, else its deepest category value, else its id.
+// An issue's display label is its deepest category value (its identity), else its id.
 export function issueLabel(issue: IssueRow): string {
   return (
-    issue.name?.trim() ||
     valueAt(issue, 2) ||
     valueAt(issue, 1) ||
     valueAt(issue, 0) ||

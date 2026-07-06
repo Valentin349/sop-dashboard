@@ -11,11 +11,9 @@ function preview(text: string | null): string {
   return text.slice(0, 140).replace(/\s+/g, " ").trim();
 }
 
-// A row's headline: an explicit name, else the deepest category segment.
+// A row's headline is its deepest category segment (its identity).
 function title(issue: IssueRow): string {
-  if (issue.name?.trim()) return issue.name.trim();
-  const path = issuePath(issue);
-  const last = path.split(" › ").pop();
+  const last = issuePath(issue).split(" › ").pop();
   return last || `Issue #${issue.id}`;
 }
 

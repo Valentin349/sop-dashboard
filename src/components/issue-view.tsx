@@ -45,7 +45,8 @@ export const IssueView = memo(function IssueView({
   onEdit?: () => void;
 }) {
   const created = formatDate(issue.created_at);
-  const heading = issue.name?.trim() || issuePath(issue);
+  // The issue's identity is its deepest category level (name is not shown).
+  const heading = issuePath(issue).split(" › ").pop() || `Issue #${issue.id}`;
   const productNames = issue.product_tags.map(
     (id) => products.find((p) => p.id === id)?.name ?? `#${id}`,
   );
@@ -116,12 +117,6 @@ export const IssueView = memo(function IssueView({
                   <span>expires {issue.expiration_days}d</span>
                 </>
               )}
-              {issue.chatwoot_canned_id != null && (
-                <>
-                  <span className="opacity-50">·</span>
-                  <span>canned #{issue.chatwoot_canned_id}</span>
-                </>
-              )}
             </p>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -134,11 +129,6 @@ export const IssueView = memo(function IssueView({
               <ChipRow
                 label="Vehicle type"
                 items={issue.vehicle_type ? [issue.vehicle_type] : []}
-                tone="neutral"
-              />
-              <ChipRow
-                label="Severity"
-                items={issue.severity ? [issue.severity] : []}
                 tone="neutral"
               />
               {/* SOP-style multi-select tags (empty = applies to all). */}

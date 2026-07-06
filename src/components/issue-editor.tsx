@@ -51,10 +51,8 @@ export function IssueEditor({
   const [mainCategory, setMainCategory] = useState(issue?.main_category ?? MAIN_CATEGORIES[0]);
   const [issueType, setIssueType] = useState<string>(issue?.issue_type ?? "support");
   const [vehicleType, setVehicleType] = useState<string>(issue?.vehicle_type ?? "");
-  const [name, setName] = useState(issue?.name ?? "");
   const [subCategory, setSubCategory] = useState(issue?.sub_category ?? "");
   const [subSubCategory, setSubSubCategory] = useState(issue?.sub_sub_category ?? "");
-  const [severity, setSeverity] = useState(issue?.severity ?? "");
   const [definition, setDefinition] = useState(issue?.definition ?? "");
   const [questionsBefore, setQuestionsBefore] = useState(issue?.questions_before_log ?? "");
   const [questionsAfter, setQuestionsAfter] = useState(issue?.questions_after_log ?? "");
@@ -66,9 +64,6 @@ export function IssueEditor({
   const [alwaysLog, setAlwaysLog] = useState(issue?.always_log ?? false);
   const [expirationDays, setExpirationDays] = useState(
     issue?.expiration_days != null ? String(issue.expiration_days) : "",
-  );
-  const [cannedId, setCannedId] = useState(
-    issue?.chatwoot_canned_id != null ? String(issue.chatwoot_canned_id) : "",
   );
   const [sopIds, setSopIds] = useState((issue?.sop_ids_to_exhaust ?? []).join(", "));
   const [productTags, setProductTags] = useState<number[]>(issue?.product_tags ?? []);
@@ -91,19 +86,13 @@ export function IssueEditor({
       setError("Expiration days must be a whole number.");
       return;
     }
-    if (cannedId.trim() !== "" && numOrNull(cannedId) == null) {
-      setError("Chatwoot canned id must be a whole number.");
-      return;
-    }
 
     const payload = {
       main_category: mainCategory,
       issue_type: issueType || null,
       vehicle_type: vehicleType || null,
-      name,
       sub_category: subCategory,
       sub_sub_category: subSubCategory,
-      severity,
       definition,
       questions_before_log: questionsBefore,
       questions_after_log: questionsAfter,
@@ -112,7 +101,6 @@ export function IssueEditor({
       postlog_instructions: postlog,
       always_log: alwaysLog,
       expiration_days: numOrNull(expirationDays),
-      chatwoot_canned_id: numOrNull(cannedId),
       sop_ids_to_exhaust: parseIds(sopIds),
       product_tags: productTags,
       vehicle_tags: vehicleTags,
@@ -207,10 +195,6 @@ export function IssueEditor({
             </p>
           )}
 
-          <Field label="Name">
-            <TextInput value={name} onChange={setName} placeholder="Short issue name (optional)" />
-          </Field>
-
           {/* Category hierarchy */}
           <div className="flex flex-wrap gap-4">
             <Field label="Main category" className="min-w-48 flex-1">
@@ -256,9 +240,6 @@ export function IssueEditor({
                 ))}
               </Select>
             </Field>
-            <Field label="Severity" className="min-w-40 flex-1">
-              <TextInput value={severity} onChange={setSeverity} placeholder="optional" />
-            </Field>
           </div>
 
           {/* Flags & numeric config */}
@@ -279,14 +260,6 @@ export function IssueEditor({
                 value={expirationDays}
                 onChange={setExpirationDays}
                 placeholder="e.g. 30"
-                inputMode="numeric"
-              />
-            </Field>
-            <Field label="Chatwoot canned id" className="min-w-36 flex-1">
-              <TextInput
-                value={cannedId}
-                onChange={setCannedId}
-                placeholder="e.g. 26560"
                 inputMode="numeric"
               />
             </Field>
