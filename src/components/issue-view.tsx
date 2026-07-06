@@ -150,7 +150,7 @@ export const IssueView = memo(function IssueView({
             <Section label="Postlog instructions" body={issue.postlog_instructions} />
 
             {/* SOPs to exhaust — clickable chips that deep-link into the Knowledge base tab. */}
-            {issue.sop_ids_to_exhaust.length > 0 && (
+            {(issue.sop_ids_to_exhaust?.length ?? 0) > 0 && (
               <section>
                 <SectionLabel>SOPs to exhaust</SectionLabel>
                 {sopRefs == null ? (

@@ -25,12 +25,25 @@ async function fetchAll<T>(
   return rows;
 }
 
+// The array columns are typed non-null (IssueRow), but sop_ids_to_exhaust predates the '{}'
+// defaults and can still be null in older rows — coerce every array field to [] so consumers
+// (e.g. IssueView's `sop_ids_to_exhaust.length`) never hit null.
+function normalizeIssue(row: IssueRow): IssueRow {
+  return {
+    ...row,
+    sop_ids_to_exhaust: row.sop_ids_to_exhaust ?? [],
+    product_tags: row.product_tags ?? [],
+    vehicle_tags: row.vehicle_tags ?? [],
+    driver_status_tags: row.driver_status_tags ?? [],
+  };
+}
+
 // Every issue on a platform — the single corpus the dashboard caches. The 3-level tree and the
 // search both derive from this client-side, so it includes all fields. The corpus is small
 // (≤~75 rows/platform), so there's no need to trim columns.
-export function listIssuesByPlatform(platformId: number): Promise<IssueRow[]> {
+export async function listIssuesByPlatform(platformId: number): Promise<IssueRow[]> {
   const db = getServerClient();
-  return fetchAll<IssueRow>((from, to) =>
+  const rows = await fetchAll<IssueRow>((from, to) =>
     db
       .schema("dashboard")
       .from("issues_list")
@@ -42,6 +55,7 @@ export function listIssuesByPlatform(platformId: number): Promise<IssueRow[]> {
       .order("id")
       .range(from, to),
   );
+  return rows.map(normalizeIssue);
 }
 
 export async function getIssue(id: number | string): Promise<IssueRow | null> {
@@ -54,7 +68,7 @@ export async function getIssue(id: number | string): Promise<IssueRow | null> {
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  return data ? normalizeIssue(data) : null;
 }
 
 // Resolve sop_ids_to_exhaust → { id, title, platform_id } from ai_agent.knowledge_base (the
