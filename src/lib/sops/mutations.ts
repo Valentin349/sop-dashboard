@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { getServerClient } from "@/lib/supabase/server";
+import { type MediaType, mediaTypeFor, storagePathFor } from "./media";
 import type {
   CategoryRow,
   KnowledgeBaseMediaRow,
@@ -192,28 +193,65 @@ function sanitizeFilename(name: string): string {
   return `${randomUUID()}${ext.replace(/[^a-z0-9.]/g, "")}`;
 }
 
-export interface UploadInput {
+// Only names minted by sanitizeFilename above are accepted back from the client.
+const MINTED_FILENAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[a-z0-9]+)?$/;
+
+export interface UploadTicket {
+  bucket: string;
+  key: string;
+  token: string;
+  filename: string;
+  mediaType: MediaType;
+}
+
+// Media bytes never pass through this app. A route handler taking the file would have to clear
+// two body-size ceilings, and video clears neither: Vercel caps a function's request body at
+// 4.5MB (413 FUNCTION_PAYLOAD_TOO_LARGE — not raisable by any config), and Next buffers proxied
+// bodies at 10MB, silently truncating past that so formData() throws. So the server mints a
+// one-shot signed upload URL and the browser PUTs straight to Supabase Storage; only this small
+// JSON crosses the app. The remaining limit is Supabase's own (MAX_UPLOAD_BYTES).
+export async function createUploadTicket(input: {
   sopId: number;
-  body: ArrayBuffer;
   contentType: string;
   originalName: string;
+}): Promise<UploadTicket> {
+  const db = getServerClient();
+  const bucket = await bucketForSop(input.sopId);
+  const mediaType = mediaTypeFor(input.contentType);
+  const filename = sanitizeFilename(input.originalName);
+  const key = `${storagePathFor(mediaType)}/${filename}`;
+
+  const { data, error } = await db.storage.from(bucket).createSignedUploadUrl(key);
+  if (error) throw error;
+  return { bucket, key, token: data.token, filename, mediaType };
+}
+
+export interface RegisterInput {
+  sopId: number;
+  filename: string;
+  mediaType: MediaType;
   description: string | null;
 }
 
-export async function uploadSopMedia(input: UploadInput): Promise<KnowledgeBaseMediaRow> {
+// Record an object the browser has already uploaded with a ticket from createUploadTicket.
+// The client sends back only the filename it was issued: bucket and path are re-derived from
+// the SOP here, and the object must really exist, so a forged request can't point a media row
+// at an arbitrary storage key.
+export async function registerSopMedia(input: RegisterInput): Promise<KnowledgeBaseMediaRow> {
   const db = getServerClient();
+  if (!MINTED_FILENAME.test(input.filename)) {
+    throw new Error("filename was not issued by this server");
+  }
   const bucket = await bucketForSop(input.sopId);
-  const mediaType = input.contentType.startsWith("video") ? "video" : "image";
-  const path = mediaType === "video" ? "ai_agent/video" : "ai_agent/image";
-  const filename = sanitizeFilename(input.originalName);
+  const path = storagePathFor(input.mediaType);
 
-  const { error: upErr } = await db.storage
+  const { data: found, error: listErr } = await db.storage
     .from(bucket)
-    .upload(`${path}/${filename}`, input.body, {
-      contentType: input.contentType,
-      upsert: false,
-    });
-  if (upErr) throw upErr;
+    .list(path, { search: input.filename, limit: 1 });
+  if (listErr) throw listErr;
+  if (!found?.some((o) => o.name === input.filename)) {
+    throw new Error("upload did not complete — object not found in storage");
+  }
 
   // Append after the current last attachment.
   const { data: existing } = await db
@@ -230,8 +268,8 @@ export async function uploadSopMedia(input: UploadInput): Promise<KnowledgeBaseM
       knowledge_base_id: input.sopId,
       bucket,
       path,
-      filename,
-      media_type: mediaType,
+      filename: input.filename,
+      media_type: input.mediaType,
       description: input.description,
       index: nextIndex,
     })

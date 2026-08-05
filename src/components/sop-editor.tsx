@@ -13,6 +13,8 @@ import {
 import type { CategoryWithCount } from "@/lib/sops/queries";
 import type { KnowledgeBaseRow, ProductRow, SopMedia } from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
+import { MAX_UPLOAD_BYTES, formatBytes, mediaTypeFor } from "@/lib/sops/media";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { TagToggleGroup } from "./tag-controls";
 
 type Mode = "edit" | "create";
@@ -70,6 +72,8 @@ export function SopEditor({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Non-blocking status shown while media uploads run (they can outlast a quick save).
+  const [progress, setProgress] = useState<string | null>(null);
 
   // --- Media staging -------------------------------------------------------------------------
   // The editor edits media purely in local state; nothing is written until Save (see commitMedia).
@@ -119,18 +123,28 @@ export function SopEditor({
 
   function addFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const added = Array.from(files).map((file) => {
-      const url = URL.createObjectURL(file);
-      objectUrls.current.push(url);
-      return {
-        key: `new-${keySeq.current++}`,
-        id: null,
-        file,
-        url,
-        mediaType: file.type.startsWith("video") ? "video" : "image",
-        description: "",
-      } satisfies StagedMedia;
-    });
+    // Reject oversized files here rather than after the user has waited through an upload.
+    const tooBig = Array.from(files).filter((f) => f.size > MAX_UPLOAD_BYTES);
+    if (tooBig.length > 0) {
+      setError(
+        `${tooBig.map((f) => `"${f.name}" (${formatBytes(f.size)})`).join(", ")} — over the ` +
+          `${formatBytes(MAX_UPLOAD_BYTES)} per-file limit. Compress or trim before uploading.`,
+      );
+    }
+    const added = Array.from(files)
+      .filter((f) => f.size <= MAX_UPLOAD_BYTES)
+      .map((file) => {
+        const url = URL.createObjectURL(file);
+        objectUrls.current.push(url);
+        return {
+          key: `new-${keySeq.current++}`,
+          id: null,
+          file,
+          url,
+          mediaType: mediaTypeFor(file.type),
+          description: "",
+        } satisfies StagedMedia;
+      });
     setMedia((prev) => [...prev, ...added]);
   }
 
@@ -157,6 +171,46 @@ export function SopEditor({
     });
   }
 
+  // Send one file's bytes straight from the browser to Supabase Storage, then record it.
+  // Posting the file to /api/media instead would cap uploads at Vercel's hard 4.5MB request-body
+  // limit (FUNCTION_PAYLOAD_TOO_LARGE), which no config setting can raise — too small for video.
+  async function uploadFile(sopId: number, item: StagedMedia): Promise<number> {
+    const file = item.file as File;
+    const signRes = await fetch("/api/media/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sop: sopId,
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      }),
+    });
+    await failIfNotOk(signRes, "Preparing upload failed");
+    const ticket = await signRes.json();
+
+    const supabase = createBrowserSupabase();
+    const { error: upErr } = await supabase.storage
+      .from(ticket.bucket)
+      .uploadToSignedUrl(ticket.key, ticket.token, file, {
+        contentType: file.type || undefined,
+      });
+    if (upErr) throw new Error(`Uploading "${file.name}" failed: ${upErr.message}`);
+
+    const res = await fetch("/api/media", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sop: sopId,
+        filename: ticket.filename,
+        mediaType: ticket.mediaType,
+        description: item.description,
+      }),
+    });
+    await failIfNotOk(res, "Saving media failed");
+    return Number((await res.json()).media);
+  }
+
   // Apply the staged media changes to the DB for the (now-saved) SOP: delete removed rows, upload
   // new files (with their captions), patch edited captions, then persist the on-screen order.
   async function commitMedia(sopId: number) {
@@ -165,17 +219,15 @@ export function SopEditor({
       await failIfNotOk(res, "Removing media failed");
     }
 
+    const pending = media.filter((m) => m.file).length;
+    let done = 0;
     const finalIds: number[] = [];
     for (const item of media) {
       if (item.file) {
-        const form = new FormData();
-        form.set("sop", String(sopId));
-        form.set("file", item.file);
-        form.set("description", item.description);
-        const res = await fetch("/api/media", { method: "POST", body: form });
-        await failIfNotOk(res, "Upload failed");
-        const data = await res.json();
-        finalIds.push(Number(data.media));
+        // Videos take a while; say so rather than leaving the Save spinner unexplained.
+        setProgress(`Uploading ${done + 1} of ${pending}…`);
+        finalIds.push(await uploadFile(sopId, item));
+        done++;
       } else if (item.id != null) {
         if (originalDesc.current.get(item.id) !== item.description) {
           const res = await fetch("/api/media", {
@@ -252,6 +304,7 @@ export function SopEditor({
       setError((e as Error).message);
     } finally {
       setSaving(false);
+      setProgress(null);
     }
   }
 
@@ -315,6 +368,12 @@ export function SopEditor({
           {error && (
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive">
               {error}
+            </p>
+          )}
+          {progress && (
+            <p className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[13px] text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              {progress}
             </p>
           )}
 
@@ -463,6 +522,7 @@ function MediaManager({
       <div className="space-y-2">
         <p className="text-[12px] text-muted-foreground">
           Changes are saved to the database when you click Save. Every item needs a description.
+          Images and videos up to {formatBytes(MAX_UPLOAD_BYTES)} each.
         </p>
         {loading ? (
           <p className="text-[13px] text-muted-foreground">Loading media…</p>

@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import { listSopMedia } from "@/lib/sops/queries";
 import {
   deleteSopMedia,
+  registerSopMedia,
   reorderMedia,
   updateMediaDescription,
-  uploadSopMedia,
 } from "@/lib/sops/mutations";
+import { mediaTypeFor } from "@/lib/sops/media";
 import { requireApi } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -20,22 +21,23 @@ export async function GET(req: Request) {
   return NextResponse.json({ media });
 }
 
+// Records an object the browser already uploaded with a ticket from POST /api/media/sign. This
+// carries metadata only — the bytes go browser → Supabase Storage directly.
 export async function POST(req: Request) {
   const g = await requireApi(true);
   if (g.error) return g.error;
-  const form = await req.formData().catch(() => null);
-  const sop = Number(form?.get("sop"));
-  const file = form?.get("file");
-  if (!Number.isInteger(sop) || !(file instanceof File)) {
-    return NextResponse.json({ error: "sop and file are required" }, { status: 400 });
+  const body = await req.json().catch(() => null);
+  const sop = Number(body?.sop);
+  const filename = typeof body?.filename === "string" ? body.filename : "";
+  if (!Number.isInteger(sop) || !filename) {
+    return NextResponse.json({ error: "sop and filename are required" }, { status: 400 });
   }
-  const description = form?.get("description");
+  const description = body?.description;
   try {
-    const row = await uploadSopMedia({
+    const row = await registerSopMedia({
       sopId: sop,
-      body: await file.arrayBuffer(),
-      contentType: file.type || "application/octet-stream",
-      originalName: file.name,
+      filename,
+      mediaType: mediaTypeFor(String(body?.mediaType ?? "")),
       description: typeof description === "string" && description ? description : null,
     });
     return NextResponse.json({ ok: true, media: row.id }, { status: 201 });
