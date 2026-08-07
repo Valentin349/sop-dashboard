@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Plus, RefreshCw } from "lucide-react";
+import { BookOpen, FileText, Plus, RefreshCw } from "lucide-react";
 
 import type { Role } from "@/lib/auth/session";
 
@@ -441,6 +441,15 @@ export function Dashboard({
           ) : catLoading ? (
             <CategoryNavSkeleton />
           ) : null}
+        </div>
+        <div className="border-t p-2">
+          <a
+            href="/standard"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <BookOpen className="size-3.5" />
+            Writing standard
+          </a>
         </div>
       </aside>
 
