@@ -57,7 +57,8 @@ and every word of it makes this SOP look more like all the others.
 Fixed set, fixed order, exact names. Do not invent blocks. Do not reorder them.
 
 - **Driver says** — required. Two to four real phrasings drivers use for this problem.
-- **Environment** — required. The precise facts that make this the right SOP.
+- **Environment** — required. The precise facts that make this the right SOP. Platform, vehicle
+  and city are tags, not Environment lines.
 - **Ask first** — procedures only. What the agent must find out before choosing a branch.
 - **Resolution** — required. What to do. Branches if there is more than one path. Where the exact
   wording of a reply matters, an example reply sits inline in its branch — see section 5.
@@ -75,7 +76,6 @@ Copy this shape.
       "[real phrasing 3]"
 
     Environment
-      [platform] · [vehicle] · [city or zone]
       [order or trip state]
       [any other fact that decides whether this SOP applies]
 
@@ -531,7 +531,7 @@ A procedure SOP, complete, following every rule above.
       "my bag opened and the food went everywhere"
 
     Environment
-      motorbike · thermal bag
+      Thermal bag in use
       Order collected, not yet delivered · cash or paid
 
     Ask first
