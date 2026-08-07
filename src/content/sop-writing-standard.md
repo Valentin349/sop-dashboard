@@ -6,7 +6,7 @@ This is the house standard for writing and editing SOPs in the knowledge base. I
 platform and every category.
 
 If you are writing a new SOP, start at section 2. If you are editing an existing one, start at
-section 8. Read section 1 once — everything after it is rules and examples.
+section 7. Read section 1 once — everything after it is rules and examples.
 
 # 1. Why the rules are what they are
 
@@ -29,8 +29,8 @@ an SOP about seven different things is a single blurred entry that matches none 
 is why one SOP covers one subject.
 
 **Every word in the body feeds the search entry.** There is no separate summary field — the body
-text is what gets matched. This is why boilerplate openings, repeated titles and metadata stay out
-of the body.
+text is what gets matched. This is why boilerplate openings and repeated titles stay out of the
+body.
 
 # 2. The shape of an SOP
 
@@ -62,7 +62,6 @@ Fixed set, fixed order, exact names. Do not invent blocks. Do not reorder them.
 - **Resolution** — required. What to do. Branches if there is more than one path. Where the exact
   wording of a reply matters, an example reply sits inline in its branch — see section 5.
 - **Cause** — optional. Why it happens. Only when the agent must diagnose. See 4.12.
-- **Metadata** — required. Risk, entry, supersedes, related, review date.
 
 Leave a blank line between blocks. Nothing goes before the first block.
 
@@ -92,14 +91,6 @@ Copy this shape.
     B. [condition]
          [steps]
 
-    Metadata
-      platform: [name] · category: [name]
-      risk: [none | performance | deactivation]
-      entry: [driver message | proactive | both]
-      supersedes: [SOP ids this replaces, if any]
-      related: [SOP ids]
-      reviewed: [YYYY-MM-DD] · owner: [team or person]
-
 ## 2.4 Three types of SOP, three shapes
 
 Not every entry in the knowledge base is a procedure. Use the right shape.
@@ -126,10 +117,6 @@ and must not be written as if they were. Use this shorter shape:
     Links
       [directions url]
       [map url]
-
-    Metadata
-      platform: [name] · category: [name]
-      reviewed: [YYYY-MM-DD] · owner: [team or person]
 
 ## 2.5 Categories and tags
 
@@ -166,7 +153,7 @@ Rules for titles:
 - Keep the timing. A preventive coaching entry stays phrased as prevention — "How to prove you
   delivered every order", not "The customer says they never got the order". The reactive phrasing
   is a different SOP: the incident one.
-- If two SOPs would have nearly the same title, they are probably the same SOP. See 8.2.
+- If two SOPs would have nearly the same title, they are probably the same SOP. See 7.2.
 - The title says what the driver's problem is, not what we are doing about it.
 
 ## 3.2 Driver says
@@ -427,7 +414,8 @@ unassign the order" is an instruction like any other, and the agent phrases the 
 not write out a reply for every branch.
 
 Where a badly phrased message can cost the driver money, standing or trust — consequence warnings,
-liability refusals, anything with risk: deactivation — add an example reply after that branch's
+liability refusals, anything where the driver can lose their account — add an example reply after
+that branch's
 steps, on a line starting "Example reply:" so it cannot be read as a step or as something the
 driver said. Write it as a real message, not a description of one: an example steers the agent
 better than instructions.
@@ -463,28 +451,7 @@ standing, because it is true and they need to know.
 **Don't:** We can see you went offline for 40 minutes.
 **Do:** I noticed the app showed you offline for a while — was something wrong?
 
-# 6. Metadata
-
-Until these become real database fields, they live as text at the bottom of the body. Bottom, not
-top: the field labels are identical in every SOP, and identical text near the top of the body drags
-all the search entries toward each other — the same problem as the stock opening sentence in 2.1.
-
-    Metadata
-      platform: Deliveroo · category: Rider Complaints
-      risk: deactivation
-      entry: driver message, or proactively from performance data
-      supersedes: 433 section (1), 923
-      related: 313, 314
-      reviewed: 2026-08-06 · owner: ops
-
-- **risk** — one of none, performance, or deactivation. Use deactivation only where the driver can
-  lose their account. This is meant to be rankable, so be strict with it.
-- **entry** — can the agent open this conversation itself, from performance data, or only answer it
-  when the driver raises it?
-- **supersedes** — what this replaces. Mandatory when splitting or merging. See section 8.
-- **reviewed** — the date a human last confirmed the content is still true.
-
-# 7. Checklist before publishing
+# 6. Checklist before publishing
 
 Adapted from the KCS Article Quality Index. Every item is a defect if unchecked, not a preference.
 
@@ -523,37 +490,36 @@ Adapted from the KCS Article Quality Index. Every item is a defect if unchecked,
 - Any attached image adds to the text rather than replacing it. The agent cannot see images, only
   their description, so an SOP whose real content sits inside a screenshot is an empty SOP.
 
-# 8. Editing existing SOPs
+# 7. Editing existing SOPs
 
-## 8.1 Splitting one SOP into several
+## 7.1 Splitting one SOP into several
 
 When an SOP covers more than one subject:
 
 1. Write each subject as its own SOP, in full.
-2. Put the old SOP's id in the supersedes field of each new one.
-3. Retire the old one. Do not leave it in place — two SOPs on one subject compete with each other,
+2. Retire the old one. Do not leave it in place — two SOPs on one subject compete with each other,
    and the agent will get whichever one wins by accident.
 
-## 8.2 Two SOPs on the same subject
+## 7.2 Two SOPs on the same subject
 
 They compete, and the one that wins is arbitrary. Merge them:
 
 1. Keep the better-written one, or write a new one from both.
 2. Carry over anything the other one had that the winner did not.
-3. Retire the loser and record it in supersedes.
+3. Retire the loser.
 
-## 8.3 Two SOPs that contradict each other
+## 7.3 Two SOPs that contradict each other
 
 Stop and raise it. Do not pick the one that sounds right. A contradiction between two SOPs is usually
 a real disagreement about policy, and resolving it silently inside a document is how the wrong answer
 becomes official.
 
-## 8.4 Changing a policy fact
+## 7.4 Changing a policy fact
 
 Anything affecting a driver's money, account standing or safety needs ops sign-off before it is
 written. Fixing the wording of a policy is a writing change. Changing what the policy says is not.
 
-# 9. Worked example
+# 8. Worked example
 
 A procedure SOP, complete, following every rule above.
 
@@ -606,10 +572,10 @@ Note what the rules forced. The dangerous branch comes first, not in the order e
 condition that decides everything — was it cancelled? — is asked explicitly, because the agent cannot
 see the order. And the liability question is refused rather than answered.
 
-# 10. One-page summary
+# 9. One-page summary
 
 **Shape.** Driver says, Environment, Ask first, Resolution — with example replies inline where the
-wording is fragile — Cause if needed, Metadata.
+wording is fragile — Cause if needed.
 
 **Title.** The driver's problem, in the driver's words.
 
