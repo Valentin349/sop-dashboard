@@ -25,7 +25,12 @@ usually mid-shift.
 Two facts about how the system works drive most of the rules below.
 
 **The whole SOP is stored as one unit.** There is one search entry per SOP, not one per section. So
-an SOP about seven different things is a single blurred entry that matches none of them well — and
+an SOP about seven different things is a single blurred entry that matches none of them well. This
+is why one SOP covers one subject.
+
+**Every word in the body feeds the search entry.** There is no separate summary field — the body
+text is what gets matched. This is why boilerplate openings, repeated titles and metadata stay out
+of the body.
 
 # 2. The shape of an SOP
 
