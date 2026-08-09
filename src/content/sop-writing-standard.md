@@ -342,6 +342,14 @@ cannot become "IF the rider still needs to contact them" — a rider who contact
 answer still needs to, so the two conditions differ. Where no exact positive equivalent exists,
 keep the negative.
 
+Where you keep it, attach the "not" to the thing being negated.
+
+**Don't:** Check whether Rider Support Chat replied. If that has not happened, message them again.
+**Do:**
+
+    IF Rider Support Chat has not replied
+    THEN message Rider Support Chat again.
+
 ## 4.10 Numbered for order, bulleted for no order
 
 - A numbered list means these happen in this order, and the order matters.
@@ -407,6 +415,37 @@ note, or a parenthesis. If it says to do something, it is a numbered step.
     1. Take a photo of the damage.
     2. Message Rider Support Chat.
 
+## 4.15 An SOP condition carries the timing, not the verb
+
+The same SOP serves a driver mid-incident and a driver being coached after one. Write it once, in
+the timeless present, and let the agent map it onto the driver's timeline.
+
+- Steps stay imperative and present tense even when the advice is for next time. The timing lives
+  in the condition, not the verb:
+
+  **Don't:** Next time, you should message Rider Support Chat first.
+  **Do:**
+
+  WHEN a customer refuses to pay
+  THEN message Rider Support Chat.
+- Never write what the driver should have done. A step written as regret cannot be executed, and it
+  fixes the SOP to one moment in time.
+
+  **Don't:** The rider should have taken a photo before cancelling.
+  **Do:** Take a photo of the damage before cancelling.
+- Past tense belongs in exactly two places: Driver says, which keeps the driver's own grammar
+  ("the drink leaked"), and branch conditions that describe a completed event ("The order was
+  cancelled before reaching the customer").
+
+- Cut the words that anchor an SOP to the day it was written: currently, at the moment, now, new,
+  recently, soon, still.
+
+  **Don't:** Deliveroo currently shows the new "Order issue" button on the order screen.
+  **Do:** Deliveroo shows the "Order issue" button on the order screen.
+
+The SOP stays timeless. The agent maps it onto where the driver actually is, and onto what has
+already happened — that mapping is a driver-facing text rule, see 5.
+
 # 5. Driver-facing text
 
 What to say normally lives in the Resolution: a step like "Tell the driver that Rider Support will
@@ -451,6 +490,11 @@ standing, because it is true and they need to know.
 **Don't:** We can see you went offline for 40 minutes.
 **Do:** I noticed the app showed you offline for a while — was something wrong?
 
+**Coaching on something that already happened.** Never tell a driver what they should have done.
+
+**Don't:** You should have taken a photo before you cancelled.
+**Do:** Take a photo before you cancel. That is what protects you if they charge you for the order.
+
 # 6. Checklist before publishing
 
 Adapted from the KCS Article Quality Index. Every item is a defect if unchecked, not a preference.
@@ -474,6 +518,9 @@ Adapted from the KCS Article Quality Index. Every item is a defect if unchecked,
 - No action hides inside a warning or a note.
 - App names, statuses and error messages appear exactly as the app shows them.
 - Numbered where order matters, bulleted where it does not.
+- No step written as what should have happened; timing lives in conditions, not verb tense.
+- No word anchors the SOP to when it was written: currently, now, new, recently, soon, still.
+- Where a condition has to stay negative, the "not" sits on the thing it denies.
 - Simple words throughout, and it survives translation.
 
 **Driver-facing**
@@ -482,6 +529,8 @@ Adapted from the KCS Article Quality Index. Every item is a defect if unchecked,
 - No internal vocabulary anywhere a driver can see.
 - Links are bare web addresses on their own line, and they resolve today.
 - Consequences are stated without threatening.
+- No sentence tells the driver what they should have done, and coaching is aimed at the task rather
+  than at the driver.
 
 **Structure and upkeep**
 
@@ -586,7 +635,8 @@ sentences. It must survive translation. No internal vocabulary anywhere a driver
 one condition per line — never "unless" or "except", never AND mixed with OR. Positive conditions.
 Every check says what a pass looks like and what to do on a fail. Warnings before the step, actions
 never inside them. Numbered means ordered; bullets mean unordered. Three or more objects go in a
-list. One level of nesting only.
+list. One level of nesting only. Timeless present — timing lives in conditions, never in verb
+tense, and never "should have".
 
 **Scope.** One SOP, one subject, one page. If it needs "(1) … (7)", it is several SOPs.
 
