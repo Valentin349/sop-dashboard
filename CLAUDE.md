@@ -80,6 +80,42 @@ example replies inline. The other platforms still hold the old free-text SOPs.
   SOP / category / platform, and closing the tab all confirm first. The sidebar's writing-standard
   link opens in a new tab for the same reason.
 
+## Variables
+
+A value that appears in several SOPs — a weekly earnings target, a waiting time, a phone model —
+is defined once in `ai_agent.sop_variables` (platform-scoped) and written into a body as
+`{{NAME}}`. Schema and the reasoning live in `db/sop-variables.sql` (untracked).
+
+**`knowledge_base.content` holds the placeholders — it is the authored text.** Nothing reads it
+at runtime: the agent's `sop_search` returns `public.documents.content` from the vector store. So
+the substitution happens once, in the n8n workflow that builds the embeddings — it looks each
+`{{NAME}}` up in `sop_variables` by name + `platform_id` and replaces it before embedding. The
+embedding therefore holds "350,000Kz", never a placeholder, which is what keeps §1 of the writing
+standard true: every word of the body is a word a driver's message can match.
+
+Consequences worth knowing:
+
+- **The rebuild is a manual trigger, and `documents` does not track `content` edits.** Changing a
+  value is live in the dashboard immediately and reaches drivers only after the next rebuild —
+  the standard says this in §9. The panel says so too rather than implying it is live.
+- **Never write a placeholder into a body the workflow cannot yet resolve.** A rebuild in that
+  window embeds a literal `{{NAME}}` and the agent quotes it at drivers.
+- `createSop`/`updateSop` **validate** rather than render: a body naming a variable that does not
+  exist is refused with a 400.
+- Usage is **derived**, never stored — a variable is used by any row whose `content` contains its
+  token, so counts and links can't go stale. Renaming rewrites the token in every body first;
+  changing a value rewrites nothing (the token stays put); deleting one still in use is refused
+  with the list of SOPs.
+- `knowledge_base.content_source` is a **rollback snapshot** of each body as it read before
+  placeholders were introduced. The app neither reads nor writes it; drop the column once the
+  change has been through staging and production.
+- The dashboard substitutes for display only (`Text` in `sop-text.tsx` resolves at the leaf so the
+  value can be boxed and named on hover). The SOP list searches the *resolved* text — otherwise
+  searching "350,000" would miss the SOP that shows it.
+- Variables are managed in a slide-over from the knowledge base sidebar, not a page: each one
+  lists the SOPs it appears in as links. In the editor, typing `{` or `/` opens a filtered menu at
+  the caret; there is no standing list of names.
+
 ## Conventions
 
 - Keep secrets server-side (above). This is the one rule that must not bend.
