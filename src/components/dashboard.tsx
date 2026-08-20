@@ -25,7 +25,7 @@ import { SopView } from "./sop-view";
 import { SopEditor } from "./sop-editor";
 import { CategoryDialog } from "./category-dialog";
 import { VariablesPanel } from "./variables-panel";
-import { HistoryPanel } from "./history-panel";
+import { SopHistory } from "./sop-history";
 import { CategoryNavSkeleton, SopListSkeleton } from "./skeletons";
 
 type CatCache = Record<number, CategoryWithCount[]>;
@@ -73,11 +73,11 @@ export function Dashboard({
   // Variables live in a slide-over rather than their own tab: you reach for one while reading a
   // SOP, and a full navigation would lose the place you were reading.
   const [variablesOpen, setVariablesOpen] = useState(false);
-  // Version history of the open SOP, same slide-over pattern: you look back at a SOP while
-  // reading it, and a diff wants the width the SOP column doesn't have.
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const openHistory = useCallback(() => setHistoryOpen(true), []);
-  const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  // Version history takes the SOP's place in the main column, like the editor: a diff wants the
+  // full width, and "back" is one click. Exclusive with editing; any navigation leaves it.
+  const [viewingHistory, setViewingHistory] = useState(false);
+  const openHistory = useCallback(() => setViewingHistory(true), []);
+  const closeHistory = useCallback(() => setViewingHistory(false), []);
 
   // Resizable SOP-list width (loaded from localStorage after mount to avoid SSR mismatch).
   const [listWidth, setListWidth] = useState(LIST_DEFAULT_W);
@@ -229,6 +229,7 @@ export function Dashboard({
       setSopId(null);
       setEditing(false);
       setCreating(false);
+      setViewingHistory(false);
       clearSearch();
       syncUrl(pid, null, null);
       void fetchCategories(pid);
@@ -255,6 +256,7 @@ export function Dashboard({
       setSopId(null);
       setEditing(false);
       setCreating(false);
+      setViewingHistory(false);
       clearSearch();
       syncUrl(platformId, cid, null);
     },
@@ -267,6 +269,7 @@ export function Dashboard({
       setSopId(sop.id);
       setEditing(false);
       setCreating(false);
+      setViewingHistory(false);
       // A search match can live outside the open category — follow it there so the list,
       // breadcrumb, and category nav all reflect where the SOP actually sits. The category's
       // list derives from the already-loaded corpus, so there's nothing to fetch.
@@ -296,7 +299,10 @@ export function Dashboard({
     }
   }, [fetchCategories, fetchPlatformSops]);
 
-  const startEdit = useCallback(() => setEditing(true), []);
+  const startEdit = useCallback(() => {
+    setViewingHistory(false);
+    setEditing(true);
+  }, []);
   const startCreate = useCallback(() => setCreating(true), []);
   const cancelEdit = useCallback(() => {
     editorDirty.current = false;
@@ -650,6 +656,17 @@ export function Dashboard({
             onDeleted={onSopDeleted}
             onDirtyChange={setEditorDirty}
           />
+        ) : viewingHistory && selectedSop ? (
+          <SopHistory
+            sop={selectedSop}
+            platformName={platformName}
+            categoryName={categoryName}
+            isAdmin={isAdmin}
+            categoryNameById={categoryNameById}
+            products={products}
+            onClose={closeHistory}
+            onRestored={reload}
+          />
         ) : selectedSop ? (
           <SopView
             sop={selectedSop}
@@ -684,16 +701,6 @@ export function Dashboard({
         onChanged={() => {
           if (curPlatform.current != null) void fetchVariables(curPlatform.current, true);
         }}
-      />
-
-      <HistoryPanel
-        open={historyOpen}
-        onClose={closeHistory}
-        sop={selectedSop}
-        isAdmin={isAdmin}
-        categoryNameById={categoryNameById}
-        products={products}
-        onRestored={reload}
       />
 
       {platformId != null && (

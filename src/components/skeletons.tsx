@@ -63,3 +63,57 @@ export function WorkspaceSkeleton() {
     </>
   );
 }
+
+// History view while its versions load: the rail of entries and a diff-shaped block, so the
+// real content lands in place with no shift. Line widths vary like prose does.
+const DIFF_WIDTHS = [
+  "w-3/5",
+  "w-full",
+  "w-11/12",
+  "w-2/5",
+  "w-full",
+  "w-4/5",
+  "w-1/3",
+  "w-full",
+  "w-5/6",
+  "w-3/4",
+  "w-1/2",
+  "w-11/12",
+];
+
+export function SopHistorySkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1" aria-hidden>
+      <nav className="w-64 shrink-0 space-y-0.5 border-r py-1">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="border-l-2 border-l-transparent px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <Bar className="h-3 w-7" />
+              <Bar className="h-3 w-2/5" />
+            </div>
+            <Bar className="mt-1.5 h-2.5 w-1/2 opacity-70" />
+            <Bar className="mt-1 h-2.5 w-3/4 opacity-70" />
+          </div>
+        ))}
+      </nav>
+      <div className="min-w-0 flex-1">
+        <div className="max-w-4xl space-y-4 px-12 py-8">
+          <div className="flex items-center gap-3">
+            <Bar className="h-3.5 w-8" />
+            <Bar className="h-3 w-1/3" />
+            <Bar className="ml-auto h-6 w-32" />
+          </div>
+          <Bar className="h-2.5 w-24 opacity-70" />
+          <div className="space-y-2.5 rounded-md border px-3 py-3">
+            {DIFF_WIDTHS.map((w, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Bar className="h-3 w-2 opacity-50" />
+                <Bar className={`h-3 ${w}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

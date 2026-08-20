@@ -141,9 +141,10 @@ tags) leaves a full snapshot in `ai_agent.knowledge_base_versions`, written by a
   `pre_variables`; the column can be dropped once that has run.
 - Routes: `GET /api/sops/[id]/versions` (viewer), `POST /api/sops/[id]/restore { version_no }`
   (admin).
-- UI: `history-panel.tsx`, a slide-over opened from the SOP view's "History" button. Version
-  list on the left; the selected version as a unified line diff (`diff` package) against the
-  previous version or against the live row, with title/category/tag changes summarised above.
+- UI: `sop-history.tsx` takes the SOP's place in the main column, like the editor (opened from
+  the read view's "History" button; any navigation leaves it). Version list on the left; the
+  selected version as a unified line diff (`diff` package) against the previous version or
+  against the live row, with title/category/tag changes summarised above.
   The diff is over the authored text, placeholders included: a variable *value* change leaves
   no trace here, by design. Restore is admin-only and hidden when the version equals the live
   row.
