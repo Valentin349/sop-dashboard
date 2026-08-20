@@ -45,7 +45,10 @@ export async function PATCH(
     const sop = await updateSop(id, patch);
     return NextResponse.json({ sop });
   } catch (e) {
-    return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
+    // An undefined placeholder is the writer's to fix, not a server fault.
+    const message = String((e as Error).message);
+    const undefinedVar = message.includes("No variable named");
+    return NextResponse.json({ error: message }, { status: undefinedVar ? 400 : 500 });
   }
 }
 

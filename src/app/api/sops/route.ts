@@ -53,6 +53,8 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ sop }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
+    const message = String((e as Error).message);
+    const undefinedVar = message.includes("No variable named");
+    return NextResponse.json({ error: message }, { status: undefinedVar ? 400 : 500 });
   }
 }

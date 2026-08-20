@@ -4,13 +4,138 @@ import { randomUUID } from "node:crypto";
 
 import { getServerClient } from "@/lib/supabase/server";
 import { type MediaType, mediaTypeFor, storagePathFor } from "./media";
+import { renameToken, tokensIn } from "./variables";
 import type {
   CategoryRow,
   KnowledgeBaseMediaRow,
   KnowledgeBaseRow,
+  SopVariableRow,
 } from "./types";
 
 // Writes to ai_agent.knowledge_base and its media + storage objects. Service-role only.
+
+// --- Variables -------------------------------------------------------------------------------
+// knowledge_base.content holds {{TOKEN}}s. Nothing substitutes them here: the index rebuild does
+// it once, on the way into the vector store, which is the only path from a SOP to the agent.
+// What this layer guarantees is that a token in a body always has a variable behind it.
+
+async function variableNames(platformId: number): Promise<Set<string>> {
+  const db = getServerClient();
+  const { data, error } = await db
+    .from("sop_variables")
+    .select("name")
+    .eq("platform_id", platformId);
+  if (error) throw error;
+  return new Set((data ?? []).map((v) => v.name));
+}
+
+// A body referencing a variable that doesn't exist would survive all the way into an embedding
+// as a literal "{{NAME}}", so refuse the write.
+async function assertTokensDefined(content: string, platformId: number): Promise<void> {
+  const defined = await variableNames(platformId);
+  const missing = tokensIn(content).filter((t) => !defined.has(t));
+  if (missing.length > 0) {
+    throw new Error(
+      `No variable named ${missing.map((m) => `"${m}"`).join(", ")} on this platform. ` +
+        `Create it first, or remove the placeholder.`,
+    );
+  }
+}
+
+export async function createVariable(fields: {
+  platform_id: number;
+  name: string;
+  value: string;
+  description: string | null;
+}): Promise<SopVariableRow> {
+  const db = getServerClient();
+  const { data, error } = await db
+    .from("sop_variables")
+    .insert(fields)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateVariable(
+  id: number,
+  patch: { name?: string; value?: string; description?: string | null },
+): Promise<{ variable: SopVariableRow; rewritten: number }> {
+  const db = getServerClient();
+
+  const { data: before, error: readErr } = await db
+    .from("sop_variables")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (readErr) throw readErr;
+
+  // A rename has to move every reference with it, or those bodies point at nothing. A value
+  // change rewrites nothing at all — the token stays put and resolves to the new value.
+  let rewritten = 0;
+  if (patch.name && patch.name !== before.name) {
+    const { data: rows, error } = await db
+      .from("knowledge_base")
+      .select("id,content")
+      .eq("platform_id", before.platform_id);
+    if (error) throw error;
+    for (const row of rows ?? []) {
+      if (!row.content) continue;
+      const next = renameToken(row.content, before.name, patch.name);
+      if (next === row.content) continue;
+      const { error: upErr } = await db
+        .from("knowledge_base")
+        .update({ content: next })
+        .eq("id", row.id);
+      if (upErr) throw upErr;
+      rewritten++;
+    }
+  }
+
+  const { data, error } = await db
+    .from("sop_variables")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  return { variable: data, rewritten };
+}
+
+// Deleting a variable still referenced would leave a literal "{{NAME}}" to be embedded, so refuse
+// and say where it is used.
+export async function deleteVariable(id: number): Promise<void> {
+  const db = getServerClient();
+  const { data: variable, error: readErr } = await db
+    .from("sop_variables")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (readErr) throw readErr;
+
+  const { data: rows, error } = await db
+    .from("knowledge_base")
+    .select("id,title,content")
+    .eq("platform_id", variable.platform_id);
+  if (error) throw error;
+
+  const used = (rows ?? []).filter((r) => tokensIn(r.content).includes(variable.name));
+  if (used.length > 0) {
+    const names = used
+      .slice(0, 3)
+      .map((r) => `"${r.title ?? `#${r.id}`}"`)
+      .join(", ");
+    throw new Error(
+      `"${variable.name}" is still used by ${used.length} SOP${used.length === 1 ? "" : "s"} ` +
+        `(${names}${used.length > 3 ? ", …" : ""}). Remove the placeholder from those first.`,
+    );
+  }
+
+  const { error: delErr } = await db.from("sop_variables").delete().eq("id", id);
+  if (delErr) throw delErr;
+}
 
 export async function createCategory(fields: {
   platform_id: number;
@@ -82,6 +207,17 @@ export async function updateSop(
   patch: SopPatch,
 ): Promise<KnowledgeBaseRow> {
   const db = getServerClient();
+
+  if (patch.content !== undefined) {
+    const { data: row, error: readErr } = await db
+      .from("knowledge_base")
+      .select("platform_id")
+      .eq("id", id)
+      .single();
+    if (readErr) throw readErr;
+    await assertTokensDefined(patch.content, row.platform_id as number);
+  }
+
   const { data, error } = await db
     .from("knowledge_base")
     .update(patch)
@@ -106,6 +242,7 @@ export interface NewSop {
 
 export async function createSop(fields: NewSop): Promise<KnowledgeBaseRow> {
   const db = getServerClient();
+  await assertTokensDefined(fields.content, fields.platform_id);
   const { data, error } = await db
     .from("knowledge_base")
     .insert({

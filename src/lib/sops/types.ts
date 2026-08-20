@@ -20,6 +20,18 @@ export interface KnowledgeBaseRow {
   driver_status_tags: string[];
 }
 
+// A named value substituted into SOP bodies on publish. Scoped to a platform: a weekly earnings
+// target in Kz belongs to Anda, not to Bolt.
+export interface SopVariableRow {
+  id: number;
+  platform_id: number;
+  name: string;
+  value: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProductRow {
   id: number;
   name: string | null;

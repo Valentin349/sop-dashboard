@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getServerClient } from "@/lib/supabase/server";
+import { countToken } from "./variables";
 import type {
   CategoryRow,
   KnowledgeBaseMediaRow,
@@ -8,6 +9,7 @@ import type {
   PlatformRow,
   ProductRow,
   SopMedia,
+  SopVariableRow,
 } from "./types";
 
 // No caching: a category/platform change refetches fresh so the dashboard always mirrors the
@@ -53,6 +55,69 @@ export function listProducts(platformId: number): Promise<ProductRow[]> {
       .order("name")
       .range(from, to),
   );
+}
+
+// Variables for a platform, with how many SOPs use each and how many times in total. Usage is
+// derived from the authored bodies rather than stored, so it can never go stale.
+export type SopVariableWithUsage = SopVariableRow & {
+  sopCount: number;
+  occurrences: number;
+};
+
+export async function listVariables(
+  platformId: number,
+): Promise<SopVariableWithUsage[]> {
+  const db = getServerClient();
+  const [variables, sources] = await Promise.all([
+    fetchAll<SopVariableRow>((from, to) =>
+      db
+        .from("sop_variables")
+        .select("*")
+        .eq("platform_id", platformId)
+        .order("name")
+        .range(from, to),
+    ),
+    fetchAll<{ content: string | null }>((from, to) =>
+      db
+        .from("knowledge_base")
+        .select("content")
+        .eq("platform_id", platformId)
+        .range(from, to),
+    ),
+  ]);
+
+  return variables.map((v) => {
+    let sopCount = 0;
+    let occurrences = 0;
+    for (const row of sources) {
+      const n = countToken(row.content, v.name);
+      if (n > 0) {
+        sopCount++;
+        occurrences += n;
+      }
+    }
+    return { ...v, sopCount, occurrences };
+  });
+}
+
+// The SOPs that reference one variable, for the "this will rewrite N SOPs" confirmation.
+export async function listVariableUsage(
+  platformId: number,
+  name: string,
+): Promise<{ id: number; title: string | null; occurrences: number }[]> {
+  const db = getServerClient();
+  const rows = await fetchAll<Pick<KnowledgeBaseRow, "id" | "title" | "content">>((from, to) =>
+    db
+      .from("knowledge_base")
+      .select("id,title,content")
+      .eq("platform_id", platformId)
+      .order("title")
+      .range(from, to),
+  );
+  return rows.flatMap((r) => {
+    const occurrences = countToken(r.content, name);
+    return occurrences > 0 ? [{ id: r.id, title: r.title, occurrences }] : [];
+  });
 }
 
 export type CategoryWithCount = CategoryRow & { sopCount: number };
