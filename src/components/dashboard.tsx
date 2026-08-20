@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, FileText, Plus, RefreshCw } from "lucide-react";
+import { BookOpen, Braces, FileText, Plus, RefreshCw } from "lucide-react";
 
 import type { Role } from "@/lib/auth/session";
 
@@ -11,8 +11,10 @@ import type {
   KnowledgeBaseRow,
   PlatformRow,
   ProductRow,
+  SopVariableRow,
 } from "@/lib/sops/types";
 import { sopHref } from "@/lib/sops/nav";
+import { renderContent } from "@/lib/sops/variables";
 import { cn } from "@/lib/utils";
 import { TopBarCenter } from "./top-bar-center";
 import { PlatformSwitcher } from "./platform-switcher";
@@ -22,6 +24,7 @@ import { SopList } from "./sop-list";
 import { SopView } from "./sop-view";
 import { SopEditor } from "./sop-editor";
 import { CategoryDialog } from "./category-dialog";
+import { VariablesPanel } from "./variables-panel";
 import { CategoryNavSkeleton, SopListSkeleton } from "./skeletons";
 
 type CatCache = Record<number, CategoryWithCount[]>;
@@ -66,6 +69,9 @@ export function Dashboard({
   // Category dialog: open + its target (null target = create, a row = edit).
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [catDialogTarget, setCatDialogTarget] = useState<CategoryRow | null>(null);
+  // Variables live in a slide-over rather than their own tab: you reach for one while reading a
+  // SOP, and a full navigation would lose the place you were reading.
+  const [variablesOpen, setVariablesOpen] = useState(false);
 
   // Resizable SOP-list width (loaded from localStorage after mount to avoid SSR mismatch).
   const [listWidth, setListWidth] = useState(LIST_DEFAULT_W);
@@ -114,15 +120,19 @@ export function Dashboard({
   const [productCache, setProductCache] = useState<Record<number, ProductRow[]>>(
     initialPlatformId != null ? { [initialPlatformId]: initialProducts } : {},
   );
+  // Variables per platform: what {{TOKEN}}s resolve to. Tens of rows, so cached like products.
+  const [variableCache, setVariableCache] = useState<Record<number, SopVariableRow[]>>({});
 
   // Ref mirrors of the caches so the fetch callbacks can check "already cached?" without
   // depending on cache state — keeping their identity (and the children's props) stable.
   const catCacheRef = useRef(catCache);
   const platformSopCacheRef = useRef(platformSopCache);
   const productCacheRef = useRef(productCache);
+  const variableCacheRef = useRef(variableCache);
   catCacheRef.current = catCache;
   platformSopCacheRef.current = platformSopCache;
   productCacheRef.current = productCache;
+  variableCacheRef.current = variableCache;
 
   // Track the latest selection so out-of-order fetch responses don't clobber loading state.
   const curPlatform = useRef(platformId);
@@ -178,12 +188,22 @@ export function Dashboard({
     setProductCache((c) => ({ ...c, [pid]: data.products ?? [] }));
   }, []);
 
+  const fetchVariables = useCallback(async (pid: number, force = false) => {
+    if (!force && variableCacheRef.current[pid]) return;
+    const res = await fetch(`/api/variables?platform=${pid}`, { cache: "no-store" });
+    const data = await res.json();
+    setVariableCache((c) => ({ ...c, [pid]: data.variables ?? [] }));
+  }, []);
+
   // Load the SOP corpus for the platform rendered on first paint, in the background. The shell
   // (categories/products) is already painted from server-seeded props; the list shows its
   // skeleton until this resolves, then category views + search derive from it.
   useEffect(() => {
-    if (initialPlatformId != null) void fetchPlatformSops(initialPlatformId);
-  }, [initialPlatformId, fetchPlatformSops]);
+    if (initialPlatformId != null) {
+      void fetchPlatformSops(initialPlatformId);
+      void fetchVariables(initialPlatformId);
+    }
+  }, [initialPlatformId, fetchPlatformSops, fetchVariables]);
 
   // Drop any active search/filter so navigating shows the chosen scope, not stale results.
   const clearSearch = useCallback(() => {
@@ -208,8 +228,17 @@ export function Dashboard({
       void fetchCategories(pid);
       void fetchPlatformSops(pid);
       void fetchProducts(pid);
+      void fetchVariables(pid);
     },
-    [syncUrl, fetchCategories, fetchPlatformSops, fetchProducts, clearSearch, confirmDiscard],
+    [
+      syncUrl,
+      fetchCategories,
+      fetchPlatformSops,
+      fetchProducts,
+      fetchVariables,
+      clearSearch,
+      confirmDiscard,
+    ],
   );
 
   const selectCategory = useCallback(
@@ -352,6 +381,11 @@ export function Dashboard({
     [platformSops, categoryId],
   );
   const products = (platformId != null ? productCache[platformId] : undefined) ?? [];
+  // Memoised: it feeds the search index below, which must not rebuild on every render.
+  const variables = useMemo(
+    () => (platformId != null ? variableCache[platformId] : undefined) ?? [],
+    [platformId, variableCache],
+  );
   // The selected SOP is resolved straight from the corpus, so a search match in any category
   // (not just the open one) still renders.
   const selectedSop = platformSops?.find((s) => s.id === sopId) ?? null;
@@ -369,6 +403,21 @@ export function Dashboard({
   const platformMode = query.trim().length > 0 || activeFilterCount > 0;
   // Both modes derive from the corpus, so a single load gate covers them.
   const listLoading = platformSops === undefined;
+
+  // Bodies store {{TOKEN}}s, so a search for "350,000" would miss the SOP that shows it — the
+  // very thing a writer types. Match the resolved text instead. Built once per corpus/variable
+  // change, not per keystroke.
+  const searchText = useMemo(() => {
+    const values = new Map(variables.map((v) => [v.name, v.value]));
+    const m = new Map<number, string>();
+    for (const s of platformSops ?? []) {
+      m.set(
+        s.id,
+        `${s.title ?? ""}\n${values.size > 0 ? renderContent(s.content, values).content : s.content ?? ""}`.toLowerCase(),
+      );
+    }
+    return m;
+  }, [platformSops, variables]);
 
   const displayedSops = useMemo(() => {
     // A leading "#" searches by id only (e.g. "#123"); otherwise text matches id, title, or
@@ -388,9 +437,7 @@ export function Dashboard({
       if (q) {
         const hit = idMode
           ? String(s.id).includes(q)
-          : String(s.id).includes(q) ||
-            (s.title ?? "").toLowerCase().includes(q) ||
-            (s.content ?? "").toLowerCase().includes(q);
+          : String(s.id).includes(q) || (searchText.get(s.id) ?? "").includes(q);
         if (!hit) return false;
       }
       return (
@@ -399,7 +446,16 @@ export function Dashboard({
         matchesTag(statusFilter, s.driver_status_tags)
       );
     });
-  }, [platformMode, platformSops, sops, query, productFilter, vehicleFilter, statusFilter]);
+  }, [
+    platformMode,
+    platformSops,
+    sops,
+    query,
+    searchText,
+    productFilter,
+    vehicleFilter,
+    statusFilter,
+  ]);
   const platform = platforms.find((p) => p.id === platformId);
   const platformName = platform?.name ?? "Platform";
   // Platform code gates the structured (house-standard) view/editor — see lib/sops/structure.ts.
@@ -463,6 +519,17 @@ export function Dashboard({
           ) : null}
         </div>
         <div className="border-t p-2">
+          <button
+            type="button"
+            onClick={() => setVariablesOpen(true)}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Braces className="size-3.5" />
+            Variables
+            {variables.length > 0 && (
+              <span className="ml-auto tabular-nums opacity-70">{variables.length}</span>
+            )}
+          </button>
           {/* New tab: consulting the standard mid-edit must not navigate away from a draft. */}
           <a
             href="/standard"
@@ -554,6 +621,8 @@ export function Dashboard({
             categoryId={categoryId}
             categories={categories ?? []}
             products={products}
+            variables={variables}
+            onOpenVariables={() => setVariablesOpen(true)}
             onCancel={cancelEdit}
             onSaved={onSopSaved}
             onDeleted={onSopDeleted}
@@ -568,6 +637,8 @@ export function Dashboard({
             categoryId={categoryId}
             categories={categories ?? []}
             products={products}
+            variables={variables}
+            onOpenVariables={() => setVariablesOpen(true)}
             onCancel={cancelEdit}
             onSaved={onSopSaved}
             onDeleted={onSopDeleted}
@@ -580,6 +651,8 @@ export function Dashboard({
             platformCode={platformCode}
             categoryName={categoryName}
             products={products}
+            variables={variables}
+            onOpenVariables={() => setVariablesOpen(true)}
             onEdit={isAdmin ? startEdit : undefined}
           />
         ) : (
@@ -592,6 +665,19 @@ export function Dashboard({
         )}
         </div>
       </section>
+
+      <VariablesPanel
+        open={variablesOpen}
+        onClose={() => setVariablesOpen(false)}
+        platformId={platformId}
+        variables={variables}
+        sops={platformSops ?? []}
+        isAdmin={isAdmin}
+        onSelectSop={selectSop}
+        onChanged={() => {
+          if (curPlatform.current != null) void fetchVariables(curPlatform.current, true);
+        }}
+      />
 
       {platformId != null && (
         <CategoryDialog
