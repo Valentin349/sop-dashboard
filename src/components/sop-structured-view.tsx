@@ -4,7 +4,7 @@ import { memo } from "react";
 
 import type { SopBlock, SopDoc } from "@/lib/sops/structure";
 import { SopBody } from "./sop-body";
-import { linkify } from "./sop-text";
+import { Text } from "./sop-text";
 
 // Read view for SOPs written to the house standard: the same text, laid out by block. No
 // controls, no fields — editing lives in the editor (see sop-structured-editor.tsx).
@@ -25,7 +25,7 @@ function DriverSays({ phrases }: { phrases: string[] }) {
     <ul className="space-y-2">
       {phrases.map((p, i) => (
         <li key={i} className="border-l-2 border-border pl-3.5 leading-[1.7]">
-          {linkify(p)}
+          <Text value={p} />
         </li>
       ))}
     </ul>
@@ -65,7 +65,7 @@ function Resolution({
               {br.label}
             </span>
             <p className="min-w-0 flex-1 font-medium leading-snug">
-              {linkify(br.condition)}
+              <Text value={br.condition} />
             </p>
           </div>
           {br.body.trim() && (
@@ -114,7 +114,7 @@ export const SopStructuredView = memo(function SopStructuredView({ doc }: { doc:
   return (
     <div className="space-y-8 font-serif text-[1.05rem] text-foreground/90">
       {doc.preamble.trim() && (
-        <p className="leading-[1.7] whitespace-pre-wrap">{linkify(doc.preamble)}</p>
+        <p className="leading-[1.7] whitespace-pre-wrap"><Text value={doc.preamble} /></p>
       )}
       {doc.blocks.map((b) => (
         <Block key={b.name} block={b} />

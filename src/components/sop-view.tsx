@@ -1,13 +1,19 @@
 "use client";
 
 import { memo, useEffect, useMemo, useState } from "react";
-import { ChevronRight, ImageIcon, Pencil, Play } from "lucide-react";
+import { Braces, ChevronRight, ImageIcon, Pencil, Play } from "lucide-react";
 
-import type { KnowledgeBaseRow, ProductRow, SopMedia } from "@/lib/sops/types";
+import type {
+  KnowledgeBaseRow,
+  ProductRow,
+  SopMedia,
+  SopVariableRow,
+} from "@/lib/sops/types";
+import { tokensIn } from "@/lib/sops/variables";
 import { parseSop, platformSupportsStructure } from "@/lib/sops/structure";
 import { TagChips, type TagTone } from "./tag-controls";
 import { SopStructuredView } from "./sop-structured-view";
-import { linkify } from "./sop-text";
+import { Text, VariablesProvider } from "./sop-text";
 import {
   Dialog,
   DialogContent,
@@ -55,6 +61,8 @@ export const SopView = memo(function SopView({
   platformCode,
   categoryName,
   products,
+  variables,
+  onOpenVariables,
   onEdit,
 }: {
   sop: KnowledgeBaseRow;
@@ -62,6 +70,8 @@ export const SopView = memo(function SopView({
   platformCode: string | null;
   categoryName: string;
   products: ProductRow[];
+  variables: SopVariableRow[];
+  onOpenVariables?: () => void;
   onEdit?: () => void;
 }) {
   const created = formatDate(sop.created_at);
@@ -71,6 +81,21 @@ export const SopView = memo(function SopView({
     () => (platformSupportsStructure(platformCode) ? parseSop(sop.content) : null),
     [platformCode, sop.content],
   );
+  // The body above shows resolved values. This says which of those numbers are managed centrally,
+  // and where to change them.
+  const variableValues = useMemo(
+    () => new Map(variables.map((v) => [v.name, v.value])),
+    [variables],
+  );
+
+  const used = useMemo(() => {
+    const byName = new Map(variables.map((v) => [v.name, v]));
+    return tokensIn(sop.content).map((name) => ({
+      name,
+      value: byName.get(name)?.value ?? null,
+    }));
+  }, [sop.content, variables]);
+
   const productNames = sop.product_tags.map(
     (id) => products.find((p) => p.id === id)?.name ?? `#${id}`,
   );
@@ -144,12 +169,45 @@ export const SopView = memo(function SopView({
             </div>
           </header>
 
-          {doc && doc.blocks.length > 0 ? (
-            <SopStructuredView doc={doc} />
-          ) : (
-            <div className="font-serif text-[1.05rem] leading-[1.75] whitespace-pre-wrap break-words text-foreground/90">
-              {sop.content ? linkify(sop.content) : "No content."}
-            </div>
+          <VariablesProvider values={variableValues}>
+            {doc && doc.blocks.length > 0 ? (
+              <SopStructuredView doc={doc} />
+            ) : (
+              <div className="font-serif text-[1.05rem] leading-[1.75] whitespace-pre-wrap break-words text-foreground/90">
+                {sop.content ? <Text value={sop.content} /> : "No content."}
+              </div>
+            )}
+          </VariablesProvider>
+
+          {used.length > 0 && (
+            <section className="mt-12 border-t pt-8">
+              <h2 className="mb-4 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <Braces className="size-3.5" />
+                Variables
+                <span className="tabular-nums">({used.length})</span>
+              </h2>
+              <ul className="space-y-1.5">
+                {used.map((v) => (
+                  <li key={v.name} className="flex flex-wrap items-baseline gap-x-3 text-[13px]">
+                    <code className="font-mono text-muted-foreground">{`{{${v.name}}}`}</code>
+                    {v.value == null ? (
+                      <span className="text-destructive">not defined on this platform</span>
+                    ) : (
+                      <span>{v.value}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {onOpenVariables && (
+                <button
+                  type="button"
+                  onClick={onOpenVariables}
+                  className="mt-3 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Change a value
+                </button>
+              )}
+            </section>
           )}
 
           {/* Only render once media has actually arrived — no skeleton, so SOPs without

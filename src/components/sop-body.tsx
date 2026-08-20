@@ -3,7 +3,7 @@
 import { type ReactNode } from "react";
 
 import { COND_RE, buildNodes, bubblesOf, trimBlankEdges, type Node } from "@/lib/sops/body";
-import { linkify, whatsappText } from "./sop-text";
+import { Text } from "./sop-text";
 
 // Renders the body of a Resolution / Cause / Environment block as formatted text: numbered steps,
 // sub-bullets, IF/WHEN/THEN conditions, and example replies as the message the driver receives.
@@ -18,7 +18,7 @@ function Line({ text }: { text: string }) {
       {m && (
         <span className="font-sans font-semibold text-foreground">{m[1]}</span>
       )}
-      {linkify(m ? text.slice(m[1].length) : text)}
+      <Text value={m ? text.slice(m[1].length) : text} />
     </p>
   );
 }
@@ -32,7 +32,7 @@ function Reply({ text }: { text: string }) {
       <div className="space-y-2">
         {bubblesOf(text).map((message, i) => (
           <p key={i} className="leading-[1.7] whitespace-pre-wrap">
-            {whatsappText(message)}
+            <Text value={message} whatsapp />
           </p>
         ))}
       </div>
