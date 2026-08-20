@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useState } from "react";
-import { Braces, ChevronRight, ImageIcon, Pencil, Play } from "lucide-react";
+import { Braces, ChevronRight, History, ImageIcon, Pencil, Play } from "lucide-react";
 
 import type {
   KnowledgeBaseRow,
@@ -63,6 +63,7 @@ export const SopView = memo(function SopView({
   products,
   variables,
   onOpenVariables,
+  onOpenHistory,
   onEdit,
 }: {
   sop: KnowledgeBaseRow;
@@ -72,6 +73,7 @@ export const SopView = memo(function SopView({
   products: ProductRow[];
   variables: SopVariableRow[];
   onOpenVariables?: () => void;
+  onOpenHistory?: () => void;
   onEdit?: () => void;
 }) {
   const created = formatDate(sop.created_at);
@@ -132,16 +134,28 @@ export const SopView = memo(function SopView({
         <span className="min-w-0 truncate font-medium text-foreground">
           {sop.title ?? "Untitled"}
         </span>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-foreground transition-colors hover:bg-accent"
-          >
-            <Pencil className="size-3.5" />
-            Edit
-          </button>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {onOpenHistory && (
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <History className="size-3.5" />
+              History
+            </button>
+          )}
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-foreground transition-colors hover:bg-accent"
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

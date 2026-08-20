@@ -25,6 +25,7 @@ import { SopView } from "./sop-view";
 import { SopEditor } from "./sop-editor";
 import { CategoryDialog } from "./category-dialog";
 import { VariablesPanel } from "./variables-panel";
+import { HistoryPanel } from "./history-panel";
 import { CategoryNavSkeleton, SopListSkeleton } from "./skeletons";
 
 type CatCache = Record<number, CategoryWithCount[]>;
@@ -72,6 +73,11 @@ export function Dashboard({
   // Variables live in a slide-over rather than their own tab: you reach for one while reading a
   // SOP, and a full navigation would lose the place you were reading.
   const [variablesOpen, setVariablesOpen] = useState(false);
+  // Version history of the open SOP, same slide-over pattern: you look back at a SOP while
+  // reading it, and a diff wants the width the SOP column doesn't have.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const openHistory = useCallback(() => setHistoryOpen(true), []);
+  const closeHistory = useCallback(() => setHistoryOpen(false), []);
 
   // Resizable SOP-list width (loaded from localStorage after mount to avoid SSR mismatch).
   const [listWidth, setListWidth] = useState(LIST_DEFAULT_W);
@@ -653,6 +659,7 @@ export function Dashboard({
             products={products}
             variables={variables}
             onOpenVariables={() => setVariablesOpen(true)}
+            onOpenHistory={openHistory}
             onEdit={isAdmin ? startEdit : undefined}
           />
         ) : (
@@ -677,6 +684,16 @@ export function Dashboard({
         onChanged={() => {
           if (curPlatform.current != null) void fetchVariables(curPlatform.current, true);
         }}
+      />
+
+      <HistoryPanel
+        open={historyOpen}
+        onClose={closeHistory}
+        sop={selectedSop}
+        isAdmin={isAdmin}
+        categoryNameById={categoryNameById}
+        products={products}
+        onRestored={reload}
       />
 
       {platformId != null && (
