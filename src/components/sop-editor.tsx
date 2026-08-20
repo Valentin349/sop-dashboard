@@ -14,8 +14,10 @@ import type { CategoryWithCount } from "@/lib/sops/queries";
 import type { KnowledgeBaseRow, ProductRow, SopMedia } from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
 import { MAX_UPLOAD_BYTES, formatBytes, mediaTypeFor } from "@/lib/sops/media";
+import { platformSupportsStructure } from "@/lib/sops/structure";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { TagToggleGroup } from "./tag-controls";
+import { SopStructuredEditor } from "./sop-structured-editor";
 
 type Mode = "edit" | "create";
 
@@ -43,23 +45,31 @@ export function SopEditor({
   mode,
   sop,
   platformId,
+  platformCode,
   categoryId,
   categories,
   products,
   onCancel,
   onSaved,
   onDeleted,
+  onDirtyChange,
 }: {
   mode: Mode;
   sop: KnowledgeBaseRow | null;
   platformId: number;
+  platformCode: string | null;
   categoryId: number | null;
   categories: CategoryWithCount[];
   products: ProductRow[];
   onCancel: () => void;
   onSaved: (sop: KnowledgeBaseRow) => void;
   onDeleted: (id: number) => void;
+  // Reports whether there are unsaved changes, so navigating away can ask first.
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
+  // The section-by-section editor only fits corpora written to the house standard — see
+  // src/lib/sops/structure.ts. Everywhere else the body stays a plain textarea.
+  const structured = platformSupportsStructure(platformCode);
   const [title, setTitle] = useState(sop?.title ?? "");
   const [content, setContent] = useState(sop?.content ?? "");
   const [catId, setCatId] = useState<number | null>(
@@ -81,8 +91,11 @@ export function SopEditor({
   const [mediaLoading, setMediaLoading] = useState(false);
   // Existing rows the user removed in this session — deleted from the DB on Save.
   const [removedIds, setRemovedIds] = useState<number[]>([]);
-  // Original captions of loaded rows, so Save only PATCHes the ones actually edited.
-  const originalDesc = useRef<Map<number, string>>(new Map());
+  // The media as it was loaded: captions so Save only PATCHes the ones actually edited, and the
+  // order so a reorder counts as an unsaved change. State rather than refs — the unsaved-changes
+  // check below runs during render, and refs must not be read there.
+  const [loadedDesc, setLoadedDesc] = useState<Map<number, string>>(new Map());
+  const [loadedOrder, setLoadedOrder] = useState<number[]>([]);
   // Object URLs minted for previews; revoked on unmount.
   const objectUrls = useRef<string[]>([]);
   const keySeq = useRef(0);
@@ -106,7 +119,8 @@ export function SopEditor({
           mediaType: m.mediaType === "video" ? "video" : "image",
           description: m.description ?? "",
         }));
-        originalDesc.current = new Map(items.map((it) => [it.id as number, it.description]));
+        setLoadedDesc(new Map(items.map((it) => [it.id as number, it.description])));
+        setLoadedOrder(items.map((it) => it.id as number));
         setMedia(items);
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
@@ -120,6 +134,56 @@ export function SopEditor({
   }, [sop?.id]);
 
   useEffect(() => () => objectUrls.current.forEach(URL.revokeObjectURL), []);
+
+  // --- Unsaved changes -----------------------------------------------------------------------
+  // Snapshot of every editable field, captured on the first render and compared on each one.
+  // The structured editor only writes on a real keystroke, so opening a SOP is never "dirty".
+  const snapshot = JSON.stringify({
+    title,
+    content,
+    catId,
+    isComeBack,
+    productTags: [...productTags].sort(),
+    vehicleTags: [...vehicleTags].sort(),
+    statusTags: [...statusTags].sort(),
+  });
+  // Captured on the first render and never updated — the editor unmounts after a save.
+  const [baseline] = useState(snapshot);
+  const mediaDirty =
+    media.some((m) => m.file != null) ||
+    removedIds.length > 0 ||
+    media.some((m) => m.id != null && loadedDesc.get(m.id) !== m.description) ||
+    media
+      .filter((m) => m.id != null)
+      .map((m) => m.id)
+      .join(",") !== loadedOrder.join(",");
+  const dirty = snapshot !== baseline || mediaDirty;
+
+  // Tell the dashboard, so switching SOP / category / platform can ask before discarding. This
+  // writes a ref there rather than state — the parent must not re-render on every keystroke.
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  function cancel() {
+    if (
+      dirty &&
+      !confirm(
+        `Discard your changes to "${title.trim() || "this SOP"}"? Everything you have typed since opening it will be lost.`,
+      )
+    ) {
+      return;
+    }
+    onCancel();
+  }
 
   function addFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -229,7 +293,7 @@ export function SopEditor({
         finalIds.push(await uploadFile(sopId, item));
         done++;
       } else if (item.id != null) {
-        if (originalDesc.current.get(item.id) !== item.description) {
+        if (loadedDesc.get(item.id) !== item.description) {
           const res = await fetch("/api/media", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -328,8 +392,15 @@ export function SopEditor({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-3 border-b px-12 py-3">
-        <span className="text-[13px] font-medium text-muted-foreground">
-          {mode === "create" ? "New SOP" : `Editing #${sop?.id}`}
+        <span className="flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
+          <span className="truncate font-medium">
+            {mode === "create" ? "New SOP" : `Editing ${sop?.title ?? `#${sop?.id}`}`}
+          </span>
+          {dirty && (
+            <span className="shrink-0 rounded-[3px] border px-1.5 py-0.5 text-[11px]">
+              Unsaved changes
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-2">
           {mode === "edit" && (
@@ -345,7 +416,7 @@ export function SopEditor({
           )}
           <button
             type="button"
-            onClick={onCancel}
+            onClick={cancel}
             disabled={saving || deleting}
             className="rounded-md border px-3 py-1.5 text-[13px] transition-colors hover:bg-accent disabled:opacity-50"
           >
@@ -366,7 +437,10 @@ export function SopEditor({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="max-w-4xl space-y-6 px-12 py-8">
           {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive">
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+            >
               {error}
             </p>
           )}
@@ -413,40 +487,51 @@ export function SopEditor({
             </Field>
           </div>
 
-          <Field label="Content">
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={16}
-              placeholder="SOP content"
-              className="w-full resize-y rounded-md border bg-background px-3 py-2 font-mono text-[13px] leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-            />
-          </Field>
+          {structured ? (
+            <SopStructuredEditor value={content} onChange={setContent} />
+          ) : (
+            <Field label="Content">
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={16}
+                placeholder="SOP content"
+                className="w-full resize-y rounded-md border bg-background px-3 py-2 font-mono text-[13px] leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              />
+            </Field>
+          )}
 
-          <p className="text-[12px] text-muted-foreground">
-            Leave a tag type empty to apply the SOP to <span className="font-medium">all</span>{" "}
-            of that type.
-          </p>
-          <TagToggleGroup
-            label="Product tags"
-            options={products.map((p) => ({ value: p.id, label: p.name ?? `#${p.id}` }))}
-            selected={productTags}
-            onChange={(next) => setProductTags(next as number[])}
-            emptyHint="No products for this platform."
-          />
-          <div className="flex flex-wrap gap-x-10 gap-y-6">
+          {/* Tagging is a separate job from writing the body — set it apart so the two don't
+              read as one long form. */}
+          <div className="space-y-5 border-t pt-8">
+            <div>
+              <p className="text-[13.5px] font-semibold">Tags</p>
+              <p className="text-[12px] text-muted-foreground">
+                Leave a tag type empty to apply the SOP to{" "}
+                <span className="font-medium">all</span> of that type.
+              </p>
+            </div>
             <TagToggleGroup
-              label="Vehicle tags"
-              options={VEHICLE_TAGS.map((v) => ({ value: v, label: v }))}
-              selected={vehicleTags}
-              onChange={(next) => setVehicleTags(next as string[])}
+              label="Product tags"
+              options={products.map((p) => ({ value: p.id, label: p.name ?? `#${p.id}` }))}
+              selected={productTags}
+              onChange={(next) => setProductTags(next as number[])}
+              emptyHint="No products for this platform."
             />
-            <TagToggleGroup
-              label="Driver status tags"
-              options={DRIVER_STATUS_TAGS.map((v) => ({ value: v, label: v }))}
-              selected={statusTags}
-              onChange={(next) => setStatusTags(next as string[])}
-            />
+            <div className="flex flex-wrap gap-x-10 gap-y-6">
+              <TagToggleGroup
+                label="Vehicle tags"
+                options={VEHICLE_TAGS.map((v) => ({ value: v, label: v }))}
+                selected={vehicleTags}
+                onChange={(next) => setVehicleTags(next as string[])}
+              />
+              <TagToggleGroup
+                label="Driver status tags"
+                options={DRIVER_STATUS_TAGS.map((v) => ({ value: v, label: v }))}
+                selected={statusTags}
+                onChange={(next) => setStatusTags(next as string[])}
+              />
+            </div>
           </div>
 
           <MediaManager

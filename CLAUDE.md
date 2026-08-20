@@ -48,6 +48,38 @@ npm run dev     # http://localhost:3000
 npm run build   # also type-checks; build FAILS if server-only leaks to a client bundle
 ```
 
+## Structured SOPs (Anda only)
+
+Platform 1 (`anda`) has been rewritten to the house standard in
+`src/content/sop-writing-standard.md` — fixed blocks (`Driver says`, `Environment`, `Ask first`,
+`Resolution`, `Cause`; `Location`/`Links` for reference entries), branches labelled `A.`/`B.`,
+example replies inline. The other platforms still hold the old free-text SOPs.
+
+- `src/lib/sops/structure.ts` parses the stored body into those blocks and serializes it back.
+  Parse → serialize round-trips the live Anda corpus (107/134 byte-identical, 24 whitespace-only,
+  3 that repair a source typo). Content is still one plain-text blob in the DB — the structure is
+  a view over it, never a new column.
+- `src/lib/sops/body.ts` is the line-level pass inside a block (steps, sub-bullets, IF/THEN,
+  example replies). Split from the component so it can be run without a DOM.
+- The view (`sop-structured-view.tsx`) and the section editor (`sop-structured-editor.tsx`) are
+  gated on the platform code via `platformSupportsStructure`. Add a platform to that set only once
+  its corpus is rewritten; everything else keeps the plain textarea and pre-wrap view. A SOP that
+  doesn't parse into blocks falls back to plain rendering too.
+- The editor writes nothing on mount: an untouched SOP keeps its stored text byte for byte. Its
+  "Edit as plain text" toggle is the escape hatch when the structure gets in the way.
+- Two parser rules exist to stop text disappearing on save: a heading that appears twice has both
+  bodies **merged** into one block (`doc.duplicates` flags it, and the editor says so), and a
+  section left empty is **not** serialized — a bare `Cause` heading would otherwise enter the
+  search index as a word of the body (standard §1). Two live rows (1131, 1132) carry such an
+  empty `Environment`; it drops the first time either is saved.
+- The Resolution "After the branches" field renders only for SOPs that already hold that text.
+  The standard's shape is intro → branches (§2.3, §8); the parser supports a trailing run only
+  because some rows have one, so there is no way to create a new one.
+- Unsaved changes are tracked in `SopEditor` and reported up via `onDirtyChange` — a ref in
+  Dashboard, since it fires per keystroke and must not re-render the tree. Cancel, switching
+  SOP / category / platform, and closing the tab all confirm first. The sidebar's writing-standard
+  link opens in a new tab for the same reason.
+
 ## Conventions
 
 - Keep secrets server-side (above). This is the one rule that must not bend.

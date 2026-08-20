@@ -1,10 +1,13 @@
 "use client";
 
-import { Fragment, memo, useEffect, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { ChevronRight, ImageIcon, Pencil, Play } from "lucide-react";
 
 import type { KnowledgeBaseRow, ProductRow, SopMedia } from "@/lib/sops/types";
+import { parseSop, platformSupportsStructure } from "@/lib/sops/structure";
 import { TagChips, type TagTone } from "./tag-controls";
+import { SopStructuredView } from "./sop-structured-view";
+import { linkify } from "./sop-text";
 import {
   Dialog,
   DialogContent,
@@ -46,51 +49,28 @@ function TagRow({
   );
 }
 
-// Turn bare URLs in plain-text content into clickable links, leaving everything else intact.
-// Trailing sentence punctuation is kept out of the href so "see https://x.com." doesn't break.
-const URL_RE = /(https?:\/\/[^\s<]+)/g;
-
-function linkify(text: string): ReactNode {
-  const out: ReactNode[] = [];
-  let last = 0;
-  let key = 0;
-  for (const match of text.matchAll(URL_RE)) {
-    const start = match.index;
-    let url = match[0];
-    const trail = url.match(/[.,;:!?)\]}'"]+$/)?.[0] ?? "";
-    if (trail) url = url.slice(0, -trail.length);
-    if (start > last) out.push(<Fragment key={key++}>{text.slice(last, start)}</Fragment>);
-    out.push(
-      <a
-        key={key++}
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-primary underline underline-offset-2 break-all hover:no-underline"
-      >
-        {url}
-      </a>,
-    );
-    last = start + url.length;
-  }
-  if (last < text.length) out.push(<Fragment key={key++}>{text.slice(last)}</Fragment>);
-  return out;
-}
-
 export const SopView = memo(function SopView({
   sop,
   platformName,
+  platformCode,
   categoryName,
   products,
   onEdit,
 }: {
   sop: KnowledgeBaseRow;
   platformName: string;
+  platformCode: string | null;
   categoryName: string;
   products: ProductRow[];
   onEdit?: () => void;
 }) {
   const created = formatDate(sop.created_at);
+  // Only the Anda corpus is written to the house standard. Anything that doesn't parse into
+  // blocks (a half-migrated row, a stub) falls back to the plain-text rendering.
+  const doc = useMemo(
+    () => (platformSupportsStructure(platformCode) ? parseSop(sop.content) : null),
+    [platformCode, sop.content],
+  );
   const productNames = sop.product_tags.map(
     (id) => products.find((p) => p.id === id)?.name ?? `#${id}`,
   );
@@ -164,9 +144,13 @@ export const SopView = memo(function SopView({
             </div>
           </header>
 
-          <div className="font-serif text-[1.05rem] leading-[1.75] whitespace-pre-wrap break-words text-foreground/90">
-            {sop.content ? linkify(sop.content) : "No content."}
-          </div>
+          {doc && doc.blocks.length > 0 ? (
+            <SopStructuredView doc={doc} />
+          ) : (
+            <div className="font-serif text-[1.05rem] leading-[1.75] whitespace-pre-wrap break-words text-foreground/90">
+              {sop.content ? linkify(sop.content) : "No content."}
+            </div>
+          )}
 
           {/* Only render once media has actually arrived — no skeleton, so SOPs without
               any media don't flash a placeholder that reads as a failed load. */}
