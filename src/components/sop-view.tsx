@@ -14,6 +14,7 @@ import { parseSop, platformSupportsStructure } from "@/lib/sops/structure";
 import { TagChips, type TagTone } from "./tag-controls";
 import { SopStructuredView } from "./sop-structured-view";
 import { Text, VariablesProvider } from "./sop-text";
+import { prefetchVersions } from "./sop-history";
 import {
   Dialog,
   DialogContent,
@@ -139,6 +140,8 @@ export const SopView = memo(function SopView({
             <button
               type="button"
               onClick={onOpenHistory}
+              onMouseEnter={() => void prefetchVersions(sop)}
+              onFocus={() => void prefetchVersions(sop)}
               className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors hover:bg-accent hover:text-foreground"
             >
               <History className="size-3.5" />

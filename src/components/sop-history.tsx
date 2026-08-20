@@ -140,6 +140,46 @@ async function fetchVersions(id: number): Promise<KnowledgeBaseVersionRow[]> {
   return data.versions ?? [];
 }
 
+// History is opened again and again for the SOP being worked on, and every open paying a round
+// trip (auth check, then the query) reads as a stall. So: one in-memory copy per SOP, refreshed
+// in the background each time. Each copy remembers the SOP row it was fetched against; it is
+// current as long as the live row still reads the same — a save changes the row, so a stale
+// copy is never shown. (An empty list is a valid copy: a SOP with no versions yet.)
+const cache = new Map<number, { sop: Snapshot; versions: KnowledgeBaseVersionRow[] }>();
+const inflight = new Map<number, Promise<KnowledgeBaseVersionRow[]>>();
+
+function snapshotOf(sop: KnowledgeBaseRow): Snapshot {
+  return {
+    title: sop.title,
+    content: sop.content,
+    category_id: sop.category_id,
+    is_come_back: sop.is_come_back,
+    product_tags: sop.product_tags,
+    vehicle_tags: sop.vehicle_tags,
+    driver_status_tags: sop.driver_status_tags,
+  };
+}
+
+// Also called from the History button's hover, so a click usually lands on a loaded list.
+export function prefetchVersions(sop: KnowledgeBaseRow): Promise<KnowledgeBaseVersionRow[]> {
+  const pending = inflight.get(sop.id);
+  if (pending) return pending;
+  const snap = snapshotOf(sop);
+  const p = fetchVersions(sop.id)
+    .then((list) => {
+      cache.set(sop.id, { sop: snap, versions: list });
+      return list;
+    })
+    .finally(() => inflight.delete(sop.id));
+  inflight.set(sop.id, p);
+  return p;
+}
+
+function cachedIfCurrent(sop: KnowledgeBaseRow): KnowledgeBaseVersionRow[] | null {
+  const hit = cache.get(sop.id);
+  return hit && sameSnapshot(hit.sop, sop) ? hit.versions : null;
+}
+
 export function SopHistory({
   sop,
   platformName,
@@ -160,11 +200,14 @@ export function SopHistory({
   onRestored: (sop: KnowledgeBaseRow) => void;
 }) {
   // Keyed by SOP so a switch shows the skeleton rather than the previous SOP's history, with
-  // nothing to reset when the selection changes.
+  // nothing to reset when the selection changes. Starts from the cache when that is current.
   const [loaded, setLoaded] = useState<{
     sopId: number;
     versions: KnowledgeBaseVersionRow[];
-  } | null>(null);
+  } | null>(() => {
+    const list = cachedIfCurrent(sop);
+    return list ? { sopId: sop.id, versions: list } : null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   // null = "the newest", so a background refresh that brings a new version shows it unless the
@@ -176,9 +219,11 @@ export function SopHistory({
   const sopId = sop.id;
   const versions = loaded != null && loaded.sopId === sopId ? loaded.versions : null;
 
+  // Refresh on every open, cached or not: labels land a moment after a save, and the list may
+  // have been trimmed.
   useEffect(() => {
     let active = true;
-    fetchVersions(sopId).then(
+    prefetchVersions(sop).then(
       (list) => {
         if (!active) return;
         setLoaded({ sopId, versions: list });
@@ -191,7 +236,7 @@ export function SopHistory({
     return () => {
       active = false;
     };
-  }, [sopId]);
+  }, [sop, sopId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -266,7 +311,7 @@ export function SopHistory({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Restore failed");
       onRestored(data.sop);
-      const list = await fetchVersions(sopId);
+      const list = await prefetchVersions(sop);
       setLoaded({ sopId, versions: list });
       setSelectedNo(null);
       setNote(`Restored version ${selected.version_no}.`);
