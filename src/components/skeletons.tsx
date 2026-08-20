@@ -2,7 +2,9 @@
 // Widths mirror the real layout so nothing shifts when content streams in.
 
 function Bar({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-muted ${className}`} />;
+  // bg-muted is 3% off the page background — invisible once animate-pulse halves it. A tint of
+  // the foreground reads in both themes.
+  return <div className={`animate-pulse rounded bg-foreground/10 ${className}`} />;
 }
 
 export function CategoryNavSkeleton() {
