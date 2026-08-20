@@ -11,7 +11,12 @@ import {
 } from "lucide-react";
 
 import type { CategoryWithCount } from "@/lib/sops/queries";
-import type { KnowledgeBaseRow, ProductRow, SopMedia } from "@/lib/sops/types";
+import type {
+  KnowledgeBaseRow,
+  ProductRow,
+  SopMedia,
+  SopVariableRow,
+} from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
 import { MAX_UPLOAD_BYTES, formatBytes, mediaTypeFor } from "@/lib/sops/media";
 import { platformSupportsStructure } from "@/lib/sops/structure";
@@ -49,6 +54,8 @@ export function SopEditor({
   categoryId,
   categories,
   products,
+  variables,
+  onOpenVariables,
   onCancel,
   onSaved,
   onDeleted,
@@ -61,6 +68,8 @@ export function SopEditor({
   categoryId: number | null;
   categories: CategoryWithCount[];
   products: ProductRow[];
+  variables: SopVariableRow[];
+  onOpenVariables?: () => void;
   onCancel: () => void;
   onSaved: (sop: KnowledgeBaseRow) => void;
   onDeleted: (id: number) => void;
@@ -488,7 +497,12 @@ export function SopEditor({
           </div>
 
           {structured ? (
-            <SopStructuredEditor value={content} onChange={setContent} />
+            <SopStructuredEditor
+              value={content}
+              onChange={setContent}
+              variables={variables}
+              onOpenVariables={onOpenVariables}
+            />
           ) : (
             <Field label="Content">
               <textarea
