@@ -9,7 +9,8 @@ RAG source consumed by the `driver-context-manager` service (`comms.topic_sops.s
 ## Stack
 
 Next.js 16 (App Router) + TypeScript · Tailwind v4 + shadcn/ui · `@supabase/supabase-js`.
-npm. Node 24. No auth yet.
+npm. Node 24. Supabase Auth: access needs a `viewer`/`admin` role in the user's
+`app_metadata` (`src/lib/auth/session.ts`); route handlers guard with `requireApi()`.
 
 > Next.js is v16 — newer than most training data. Conventions may differ; check
 > `node_modules/next/dist/docs/` before writing framework code (see AGENTS.md). `cacheComponents`
@@ -115,6 +116,37 @@ Consequences worth knowing:
 - Variables are managed in a slide-over from the knowledge base sidebar, not a page: each one
   lists the SOPs it appears in as links. In the editor, typing `{` or `/` opens a filtered menu at
   the caret; there is no standing list of names.
+
+## Versions
+
+Every save that changes an editable field of a SOP (title, content, category, come-back flag,
+tags) leaves a full snapshot in `ai_agent.knowledge_base_versions`, written by a trigger on
+`knowledge_base`. Schema, trigger and backfill live in `db/sop-versions.sql` (untracked).
+
+- **Trigger, not app code, captures the snapshot** so nothing can forget: the editor, the
+  variable rename loop and a hand edit in the SQL editor all land in history. Snapshots are
+  whole rows, not deltas — a body is ~1.5 KB. The newest **50 per SOP** are kept; the trigger
+  deletes older ones. `version_no` never restarts, so a number always means the same content.
+- **The trigger can't know who or why** — it only sees the row, and PostgREST gives one
+  transaction per request, so there is no side channel. Every SOP write in `mutations.ts` goes
+  through `writeSop`: read the latest `version_no`, write, then label versions *newer than that*
+  with `change_kind` + `changed_by` (the user's email, passed down from `requireApi`). If nothing
+  editable changed, the trigger wrote nothing and nothing is labelled. Labelling is best-effort:
+  the save already happened, so a failure is logged, not thrown. A version left with
+  `change_kind = null` is an edit the app didn't make.
+- **Restore goes through `updateSop`** (`restoreSopVersion`): the body is validated against
+  today's variables like any save, and the restore becomes a new version. History is never
+  rewritten.
+- `content_source` (the pre-variables rollback copy) is backfilled into history as
+  `pre_variables`; the column can be dropped once that has run.
+- Routes: `GET /api/sops/[id]/versions` (viewer), `POST /api/sops/[id]/restore { version_no }`
+  (admin).
+- UI: `history-panel.tsx`, a slide-over opened from the SOP view's "History" button. Version
+  list on the left; the selected version as a unified line diff (`diff` package) against the
+  previous version or against the live row, with title/category/tag changes summarised above.
+  The diff is over the authored text, placeholders included: a variable *value* change leaves
+  no trace here, by design. Restore is admin-only and hidden when the version equals the live
+  row.
 
 ## Conventions
 
