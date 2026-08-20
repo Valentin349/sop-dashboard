@@ -133,7 +133,9 @@ export function VariableMenu({
           }}
           className={cn(
             "flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left",
-            i === active ? "bg-accent" : "hover:bg-accent/60",
+            // Tinted from the foreground rather than --accent, which sits 3% off the popover
+            // background and makes the selection invisible in light mode. Inverts with the theme.
+            i === active ? "bg-foreground/[0.12]" : "hover:bg-foreground/[0.06]",
           )}
         >
           <span className="truncate font-mono text-[12px]">{v.name}</span>
