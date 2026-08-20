@@ -128,6 +128,19 @@ export function Dashboard({
   const curPlatform = useRef(platformId);
   const curCategory = useRef(categoryId);
 
+  // Whether the open editor holds unsaved changes. A ref, not state — this updates on every
+  // keystroke and must not re-render the dashboard. Navigating away asks before discarding.
+  const editorDirty = useRef(false);
+  const setEditorDirty = useCallback((d: boolean) => {
+    editorDirty.current = d;
+  }, []);
+  const confirmDiscard = useCallback(
+    () =>
+      !editorDirty.current ||
+      confirm("Discard your unsaved changes to this SOP? Everything you have typed will be lost."),
+    [],
+  );
+
   const syncUrl = useCallback((p: number | null, c: number | null, s: number | null) => {
     window.history.replaceState(null, "", sopHref({ platform: p, category: c, sop: s }));
   }, []);
@@ -182,6 +195,7 @@ export function Dashboard({
 
   const selectPlatform = useCallback(
     (pid: number) => {
+      if (!confirmDiscard()) return;
       curPlatform.current = pid;
       curCategory.current = null;
       setPlatformId(pid);
@@ -195,11 +209,12 @@ export function Dashboard({
       void fetchPlatformSops(pid);
       void fetchProducts(pid);
     },
-    [syncUrl, fetchCategories, fetchPlatformSops, fetchProducts, clearSearch],
+    [syncUrl, fetchCategories, fetchPlatformSops, fetchProducts, clearSearch, confirmDiscard],
   );
 
   const selectCategory = useCallback(
     (cid: number) => {
+      if (!confirmDiscard()) return;
       curCategory.current = cid;
       setCategoryId(cid);
       setSopId(null);
@@ -208,11 +223,12 @@ export function Dashboard({
       clearSearch();
       syncUrl(platformId, cid, null);
     },
-    [platformId, syncUrl, clearSearch],
+    [platformId, syncUrl, clearSearch, confirmDiscard],
   );
 
   const selectSop = useCallback(
     (sop: KnowledgeBaseRow) => {
+      if (!confirmDiscard()) return;
       setSopId(sop.id);
       setEditing(false);
       setCreating(false);
@@ -226,7 +242,7 @@ export function Dashboard({
       }
       syncUrl(platformId, targetCategory, sop.id);
     },
-    [platformId, categoryId, syncUrl],
+    [platformId, categoryId, syncUrl, confirmDiscard],
   );
 
   const refresh = useCallback(() => {
@@ -248,6 +264,7 @@ export function Dashboard({
   const startEdit = useCallback(() => setEditing(true), []);
   const startCreate = useCallback(() => setCreating(true), []);
   const cancelEdit = useCallback(() => {
+    editorDirty.current = false;
     setEditing(false);
     setCreating(false);
     reload(); // staged media edits are discarded on cancel; refresh in case the DB changed elsewhere
@@ -383,7 +400,10 @@ export function Dashboard({
       );
     });
   }, [platformMode, platformSops, sops, query, productFilter, vehicleFilter, statusFilter]);
-  const platformName = platforms.find((p) => p.id === platformId)?.name ?? "Platform";
+  const platform = platforms.find((p) => p.id === platformId);
+  const platformName = platform?.name ?? "Platform";
+  // Platform code gates the structured (house-standard) view/editor — see lib/sops/structure.ts.
+  const platformCode = platform?.code ?? null;
   const categoryName =
     categories?.find((c) => c.id === categoryId)?.name ?? "Category";
 
@@ -443,8 +463,11 @@ export function Dashboard({
           ) : null}
         </div>
         <div className="border-t p-2">
+          {/* New tab: consulting the standard mid-edit must not navigate away from a draft. */}
           <a
             href="/standard"
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-2 rounded-md px-3 py-2 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <BookOpen className="size-3.5" />
@@ -527,29 +550,34 @@ export function Dashboard({
             mode="create"
             sop={null}
             platformId={platformId}
+            platformCode={platformCode}
             categoryId={categoryId}
             categories={categories ?? []}
             products={products}
             onCancel={cancelEdit}
             onSaved={onSopSaved}
             onDeleted={onSopDeleted}
+            onDirtyChange={setEditorDirty}
           />
         ) : editing && selectedSop && platformId != null ? (
           <SopEditor
             mode="edit"
             sop={selectedSop}
             platformId={platformId}
+            platformCode={platformCode}
             categoryId={categoryId}
             categories={categories ?? []}
             products={products}
             onCancel={cancelEdit}
             onSaved={onSopSaved}
             onDeleted={onSopDeleted}
+            onDirtyChange={setEditorDirty}
           />
         ) : selectedSop ? (
           <SopView
             sop={selectedSop}
             platformName={platformName}
+            platformCode={platformCode}
             categoryName={categoryName}
             products={products}
             onEdit={isAdmin ? startEdit : undefined}
