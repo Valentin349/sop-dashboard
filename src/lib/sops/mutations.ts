@@ -7,12 +7,112 @@ import { type MediaType, mediaTypeFor, storagePathFor } from "./media";
 import { renameToken, tokensIn } from "./variables";
 import type {
   CategoryRow,
+  ChangeKind,
   KnowledgeBaseMediaRow,
   KnowledgeBaseRow,
+  KnowledgeBaseVersionRow,
   SopVariableRow,
 } from "./types";
 
 // Writes to ai_agent.knowledge_base and its media + storage objects. Service-role only.
+
+// --- Versions --------------------------------------------------------------------------------
+// A trigger (db/sop-versions.sql) snapshots a SOP into knowledge_base_versions on every save
+// that changes an editable field. It can't know who saved or why — it only sees the row — so
+// every SOP write here goes through writeSop: note the latest version number, write, then label
+// the version the trigger just created, and only that one. If nothing editable changed, the
+// trigger wrote nothing and nothing gets labelled.
+
+export interface ChangeLabel {
+  kind: ChangeKind;
+  // The signed-in user's email.
+  by: string | null;
+}
+
+async function latestVersionNo(sopId: number): Promise<number> {
+  const db = getServerClient();
+  const { data, error } = await db
+    .from("knowledge_base_versions")
+    .select("version_no")
+    .eq("knowledge_base_id", sopId)
+    .order("version_no", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.version_no ?? 0;
+}
+
+// Best-effort on purpose: by the time this runs the save has gone through, and an error here
+// would tell the writer their save failed when it didn't. A label that doesn't land leaves an
+// honest "unknown" in the history.
+async function labelVersionsAfter(
+  sopId: number,
+  after: number,
+  label: ChangeLabel,
+): Promise<void> {
+  const db = getServerClient();
+  const { error } = await db
+    .from("knowledge_base_versions")
+    .update({ change_kind: label.kind, changed_by: label.by })
+    .eq("knowledge_base_id", sopId)
+    .gt("version_no", after)
+    .is("change_kind", null);
+  if (error) console.error(`Could not label the new version of SOP ${sopId}: ${error.message}`);
+}
+
+async function writeSop(
+  id: number,
+  patch: SopPatch,
+  label: ChangeLabel,
+): Promise<KnowledgeBaseRow> {
+  const db = getServerClient();
+  const before = await latestVersionNo(id).catch((e: Error) => {
+    console.error(`Could not read versions of SOP ${id}: ${e.message}`);
+    return null;
+  });
+
+  const { data, error } = await db
+    .from("knowledge_base")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  if (before !== null) await labelVersionsAfter(id, before, label);
+  return data;
+}
+
+// Restoring never rewrites history: the old fields go back through updateSop, so the body is
+// checked against today's variables (a placeholder renamed or deleted since is refused, as on
+// any save) and the restore is itself a new version.
+export async function restoreSopVersion(
+  id: number,
+  versionNo: number,
+  by: string | null,
+): Promise<KnowledgeBaseRow> {
+  const db = getServerClient();
+  const { data: v, error } = await db
+    .from("knowledge_base_versions")
+    .select("*")
+    .eq("knowledge_base_id", id)
+    .eq("version_no", versionNo)
+    .maybeSingle();
+  if (error) throw error;
+  const version = v as KnowledgeBaseVersionRow | null;
+  if (!version) throw new Error(`Version ${versionNo} of this SOP no longer exists.`);
+
+  const patch: SopPatch = {
+    content: version.content ?? "",
+    is_come_back: version.is_come_back ?? false,
+    product_tags: version.product_tags ?? [],
+    vehicle_tags: version.vehicle_tags ?? [],
+    driver_status_tags: version.driver_status_tags ?? [],
+  };
+  if (version.title !== null) patch.title = version.title;
+  if (version.category_id !== null) patch.category_id = Number(version.category_id);
+  return updateSop(id, patch, by, "restore");
+}
 
 // --- Variables -------------------------------------------------------------------------------
 // knowledge_base.content holds {{TOKEN}}s. Nothing substitutes them here: the index rebuild does
@@ -61,6 +161,7 @@ export async function createVariable(fields: {
 export async function updateVariable(
   id: number,
   patch: { name?: string; value?: string; description?: string | null },
+  by: string | null,
 ): Promise<{ variable: SopVariableRow; rewritten: number }> {
   const db = getServerClient();
 
@@ -84,11 +185,9 @@ export async function updateVariable(
       if (!row.content) continue;
       const next = renameToken(row.content, before.name, patch.name);
       if (next === row.content) continue;
-      const { error: upErr } = await db
-        .from("knowledge_base")
-        .update({ content: next })
-        .eq("id", row.id);
-      if (upErr) throw upErr;
+      // Each rewritten body is a version of its own, labelled so history shows the rename for
+      // what it is rather than as a hand edit.
+      await writeSop(row.id, { content: next }, { kind: "variable_rename", by });
       rewritten++;
     }
   }
@@ -205,6 +304,8 @@ export interface SopPatch {
 export async function updateSop(
   id: number,
   patch: SopPatch,
+  by: string | null,
+  kind: ChangeKind = "edit",
 ): Promise<KnowledgeBaseRow> {
   const db = getServerClient();
 
@@ -218,14 +319,7 @@ export async function updateSop(
     await assertTokensDefined(patch.content, row.platform_id as number);
   }
 
-  const { data, error } = await db
-    .from("knowledge_base")
-    .update(patch)
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data;
+  return writeSop(id, patch, { kind, by });
 }
 
 export interface NewSop {
@@ -240,7 +334,7 @@ export interface NewSop {
   driver_status_tags?: string[];
 }
 
-export async function createSop(fields: NewSop): Promise<KnowledgeBaseRow> {
+export async function createSop(fields: NewSop, by: string | null): Promise<KnowledgeBaseRow> {
   const db = getServerClient();
   await assertTokensDefined(fields.content, fields.platform_id);
   const { data, error } = await db
@@ -259,6 +353,8 @@ export async function createSop(fields: NewSop): Promise<KnowledgeBaseRow> {
     .select("*")
     .single();
   if (error) throw error;
+  // The insert trigger wrote version 1; label it.
+  await labelVersionsAfter(data.id, 0, { kind: "create", by });
   return data;
 }
 

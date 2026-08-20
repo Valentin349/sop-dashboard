@@ -42,7 +42,7 @@ export async function PATCH(
   }
 
   try {
-    const sop = await updateSop(id, patch);
+    const sop = await updateSop(id, patch, g.user.email);
     return NextResponse.json({ sop });
   } catch (e) {
     // An undefined placeholder is the writer's to fix, not a server fault.

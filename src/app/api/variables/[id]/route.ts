@@ -44,7 +44,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   try {
-    const { variable, rewritten } = await updateVariable(id, patch);
+    const { variable, rewritten } = await updateVariable(id, patch, g.user.email);
     return NextResponse.json({ variable, rewritten });
   } catch (e) {
     const message = String((e as Error).message);

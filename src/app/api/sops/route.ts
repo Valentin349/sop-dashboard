@@ -34,7 +34,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const sop = await createSop({
+    const sop = await createSop(
+      {
       platform_id,
       category_id,
       title,
@@ -50,7 +51,9 @@ export async function POST(req: Request) {
       driver_status_tags: Array.isArray(body?.driver_status_tags)
         ? body.driver_status_tags.filter((v: unknown) => typeof v === "string")
         : [],
-    });
+      },
+      g.user.email,
+    );
     return NextResponse.json({ sop }, { status: 201 });
   } catch (e) {
     const message = String((e as Error).message);

@@ -6,6 +6,7 @@ import type {
   CategoryRow,
   KnowledgeBaseMediaRow,
   KnowledgeBaseRow,
+  KnowledgeBaseVersionRow,
   PlatformRow,
   ProductRow,
   SopMedia,
@@ -249,6 +250,19 @@ export async function listSopMedia(knowledgeBaseId: number): Promise<SopMedia[]>
       },
     ];
   });
+}
+
+// Every kept version of one SOP, newest first. The trigger caps this at 50 per SOP
+// (db/sop-versions.sql), small enough to return whole — the diff view needs the bodies anyway.
+export async function listSopVersions(sopId: number): Promise<KnowledgeBaseVersionRow[]> {
+  const db = getServerClient();
+  const { data, error } = await db
+    .from("knowledge_base_versions")
+    .select("*")
+    .eq("knowledge_base_id", sopId)
+    .order("version_no", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function getSop(id: number | string): Promise<KnowledgeBaseRow | null> {

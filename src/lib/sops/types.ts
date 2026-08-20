@@ -32,6 +32,34 @@ export interface SopVariableRow {
   updated_at: string;
 }
 
+// Why a SOP version exists. The app sets the first four after a save; the backfill in
+// db/sop-versions.sql set the last two. null means the trigger saw an edit the app didn't make.
+export type ChangeKind =
+  | "create"
+  | "edit"
+  | "variable_rename"
+  | "restore"
+  | "baseline"
+  | "pre_variables";
+
+// One snapshot of a SOP's editable fields, written by the knowledge_base trigger on every save
+// that changes one of them (db/sop-versions.sql). Newest 50 per SOP are kept.
+export interface KnowledgeBaseVersionRow {
+  id: number;
+  knowledge_base_id: number;
+  version_no: number;
+  title: string | null;
+  content: string | null;
+  category_id: number | null;
+  is_come_back: boolean | null;
+  product_tags: number[] | null;
+  vehicle_tags: string[] | null;
+  driver_status_tags: string[] | null;
+  change_kind: ChangeKind | null;
+  changed_by: string | null;
+  changed_at: string;
+}
+
 export interface ProductRow {
   id: number;
   name: string | null;
