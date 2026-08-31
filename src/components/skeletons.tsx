@@ -119,3 +119,34 @@ export function SopHistorySkeleton() {
     </div>
   );
 }
+
+// Onboarding topic view while the bodies load: the header block and two runs of numbered lines,
+// matching the real article so the content lands in place.
+export function OnboardingTopicSkeleton() {
+  return (
+    <div className="flex h-full flex-col" aria-hidden>
+      <div className="border-b px-12 py-3">
+        <Bar className="h-4 w-1/3" />
+      </div>
+      <div className="max-w-4xl px-12 py-12">
+        <Bar className="h-7 w-2/3" />
+        <Bar className="mt-3 h-3 w-1/3 opacity-70" />
+        <div className="mt-10 space-y-8">
+          {[6, 3].map((lines, section) => (
+            <div key={section}>
+              <Bar className="h-2.5 w-20 opacity-70" />
+              <div className="mt-3 space-y-2.5">
+                {Array.from({ length: lines }).map((_, i) => (
+                  <div key={i} className="flex gap-3">
+                    <Bar className="h-3.5 w-4 opacity-50" />
+                    <Bar className={`h-3.5 ${i % 3 === 2 ? "w-2/3" : "w-full"}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
