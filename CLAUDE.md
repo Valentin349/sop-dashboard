@@ -49,6 +49,18 @@ npm run dev     # http://localhost:3000
 npm run build   # also type-checks; build FAILS if server-only leaks to a client bundle
 ```
 
+`next.config.ts` turns off `experimental.reactDebugChannel` in dev. Next 16's React debug
+channel decides "this document came from the browser cache" by reading
+`performance.getEntriesByType("navigation")[0].transferSize === 0`; when it then can't restore
+the matching `sessionStorage` entry it calls `location.reload()`
+(`client/dev/debug-channel.js`). On `/` that read is 0 on every load here, so the reload
+re-enters the same check — a silent endless full-page reload loop (~1.6 loads a second, each a
+real `force-dynamic` server render, no console output at all). Cost of the switch: React's
+extra debug info in dev. Dev only — `next build`/`next start` keep the default.
+
+The auth gate lives in `src/proxy.ts` (Next 16's renamed `middleware` file convention: export
+`proxy`, Node.js runtime, a `runtime` config option throws).
+
 ## Structured SOPs (Anda only)
 
 Platform 1 (`anda`) has been rewritten to the house standard in
@@ -148,6 +160,38 @@ tags) leaves a full snapshot in `ai_agent.knowledge_base_versions`, written by a
   The diff is over the authored text, placeholders included: a variable *value* change leaves
   no trace here, by design. Restore is admin-only and hidden when the version equals the live
   row.
+
+## Onboarding topics
+
+The **Onboarding** tab (`/onboarding`) shows and edits `ai_agent.onboarding_content` — the trainer
+curriculum the AI teaches new drivers, one row per step.
+
+- Columns: `title, order_index, content text[], final_checks text[], additional_context, urgency,
+  platform_id, product_id, mcq_id`. 147 rows: Yango (1) has 137 across 10 `crm.products`
+  curricula of 13-14 steps each; Deliveroo (8) has 10 rows with `product_id` null.
+- Nav is platform → curriculum (product, or the "All products" bucket for null `product_id`) →
+  ordered steps; search spans every curriculum on the platform.
+- **Two-stage load, like the SOP tab.** The page seeds only the shell: platforms, product names
+  and `listTopicIndexByPlatform` — the nav-only projection (no bodies, ~2 KB vs ~49 KB gzipped).
+  The bodies and the MCQs arrive from a background fetch on mount, so first paint costs one round
+  trip (~0.35 s of DB time against ~1.2 s for the full seed). A deep link already names its
+  platform, so its shell is fetched in parallel with the platform list instead of after it.
+  Anything needing a body (the view, the editor, body search) waits on the full corpus and shows
+  `OnboardingTopicSkeleton` meanwhile; the index rows are a subset of `OnboardingRow`, so the list
+  gains previews when the bodies land without any other change.
+- `content` and `final_checks` are `text[]`. `points-editor.tsx` edits them as one auto-growing box
+  per point: Enter splits, Backspace at the start merges up, Ctrl+↑/↓ reorders, a multi-line paste
+  spreads across points, and the highlighter button wraps the selection in `||…||`. No element may
+  contain a newline (none does, verified across the corpus), which is why Enter never inserts one.
+  "Edit as plain lines" is the escape hatch — the same two lists as raw textareas. Blank points are
+  dropped on save, not while typing. Bodies mark on-screen labels as `||Rider Support Chat||`;
+  `splitMarkup` in `src/lib/onboarding/types.ts` turns those into chips in the view.
+- `mcq_id` → `comms.mcq` — the quiz that verifies a step. Read-only here: the view renders the
+  question, choices and correct answer, and the editor only picks *which* MCQ is linked. The
+  picker offers the platform's MCQs plus the platform-less ones (30 of Anda's links are to those).
+- **No version history.** Unlike `knowledge_base`, this table has no snapshot trigger, so a save
+  or delete is final. Writes are admin-only (`requireApi(true)`); reads need viewer.
+- Routes: `GET|POST /api/onboarding`, `PATCH|DELETE /api/onboarding/[id]`, `GET /api/mcq`.
 
 ## Conventions
 

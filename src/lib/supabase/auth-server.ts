@@ -16,7 +16,7 @@ export async function createAuthServerClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          // In Server Components cookies are read-only; the middleware refresh handles writes.
+          // In Server Components cookies are read-only; the proxy refresh handles writes.
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),

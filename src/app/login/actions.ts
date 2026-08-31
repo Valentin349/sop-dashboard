@@ -9,7 +9,7 @@ export interface LoginState {
 }
 
 // Server-side sign-in: cookies are written on the response before the redirect, so the very
-// next request (middleware) sees the session — no client-side race, no full reload.
+// next request (proxy) sees the session — no client-side race, no full reload.
 export async function login(
   _prev: LoginState,
   formData: FormData,
