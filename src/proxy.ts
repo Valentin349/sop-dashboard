@@ -47,6 +47,10 @@ export async function proxy(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
+// Everything except: the login page itself (anchored — `/loginsomething` is still gated),
+// all of Next's internals (`/_next/*`, dev HMR included — every request here costs a Supabase
+// `getUser()` round-trip, ~200ms), and files served from `public/` (anything with a file
+// extension). API routes stay in: they answer 401 rather than redirect.
 export const config = {
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!login(?:/|$)|_next/|.*\\.[^/]+$).*)"],
 };
