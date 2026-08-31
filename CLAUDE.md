@@ -193,6 +193,85 @@ curriculum the AI teaches new drivers, one row per step.
   or delete is final. Writes are admin-only (`requireApi(true)`); reads need viewer.
 - Routes: `GET|POST /api/onboarding`, `PATCH|DELETE /api/onboarding/[id]`, `GET /api/mcq`.
 
+## Monitor (production turns)
+
+The **Monitor** tab (`/monitor`) triages what the deployed agent actually did, from
+`comms.ai_turns` — the pipeline's own turn log (~32k rows, +450/day). Read-only: viewer-gated,
+no write path, by design. It exists to replace reading n8n failure emails and scrolling Chatwoot.
+
+- **Four failure flags**, each one PostgREST filter; the feed shows the union of the selected ones
+  (none selected = all four):
+
+  | Flag | Filter | Volume (2026-08-31) |
+  |---|---|---|
+  | Escalated | `ai_output->action->>type = 'escalate_to_human'` | 168 |
+  | Invalid | `is_valid = false` | 1,357 |
+  | Retried | `retry_count > 0` | 1,378 |
+  | SOP gap | `sop_agent->>coverage in ('gap','partial')` | 257 |
+
+- **No new SQL.** Two of those address jsonb paths, which only PostgREST's raw filter syntax can
+  express; supabase-js passes such fragments through `.or()` untouched (verified live). They live
+  as raw strings in `FLAG_FILTER` (`src/lib/turns/queries.ts`) for that reason.
+- **No corpus to seed.** Unlike every other tab, the table is far too big to ship to the browser,
+  so the page seeds only platforms + the default 1-day window and the feed loads through
+  `/api/turns`. Paging is **keyset on `id`**, not offset — the feed is a descending scan and
+  offset paging re-walks every skipped row. The feed projection selects jsonb *paths*
+  (`action:ai_output->action`), never the whole `ai_output` blob: a page of 50 is ~25 KB rather
+  than hundreds. The default 1-day window costs ~430 ms (feed ~410 ms ∥ four counts ~430 ms);
+  7 days costs ~600 ms and three months ~5.5 s. `validation_result` IS carried in full
+  (+6.6 KB/page) because a row badge names the real error, and only 13% of invalid turns put one
+  in `batch_errors` — the other 87% are per-op, under `results[].errors`.
+- `ai_turns` has **no platform column** — it comes from `conversations!inner(platform_id)`, which
+  is also what scopes the query.
+- **Three agent generations share these columns**, so almost every field is optional:
+  `reactive_agent_v1` and the legacy `deliveroo_v11` emit `{reply, action, support, topic_writes}`
+  with `reply` as objects; `proactive_performance_update_v1` emits `{reply, support,
+  decision_trace}` with `reply` as plain strings and **no `action` at all**. `replyTexts` in
+  `src/components/monitor-turn.tsx` normalises both shapes. All 32,036 live rows were run through
+  the derived helpers without an exception.
+- `action.reason` is **written by the model, not an enum** — 15 values live with a long one-off
+  tail (`unclear_after_clarification` 107, `clarify_limit_reached` 11, `unsupported_topic` 9, …).
+  Never switch on it exhaustively; render it.
+- **A badge names the reason, not the category** — "Branch not in SOP", not "SOP gap". Colour
+  alone carries the category, and the filter chips above the feed are its legend, so the row never
+  spells it out twice. `flagDetails` builds them; `humanizeReason` sentence-cases the snake_case
+  code (with an acronym pass, so `branch_not_in_sop` → "Branch not in SOP"). Validation errors run
+  to 201 chars, so `shortenError` cuts the badge at the first `;`/`--` and caps it at 64 — 177
+  distinct badge labels across the corpus, none longer.
+- **The headline renders only when it adds something** (`headlineAddsDetail`, 22% of rows): an
+  escalation has the model's prose summary and a validation failure has the clause the badge
+  truncated, but a gap or a retry would just restate its badge. Suppression is on exact equality,
+  so no text is ever lost from the feed.
+- **Deep links out are the point.** `action.issue.issue_list_id` → the Issue lists tab;
+  `support[]` refs `sop:NN` → Knowledge base and `issue:NN` → Issue lists. `issue_history:NNNN`
+  and `issue_detail:NNNN` look linkable but are **`dashboard.issue_logs` ids** (logged instances,
+  ids in the thousands), not `issues_list` definitions (max id 278) — `parseSupportRef` gives them
+  their own `issue_log` kind so they render as labelled text and don't get "fixed" into a
+  mislink.
+- **The detail pane is two columns** (stacking below `xl`): the conversation is the narrative and
+  takes the main column with the turn's own output above it; everything that *explains* the turn —
+  why flagged, SOP retrieval, grounding, decision trace, provenance — sits in a 400px rail beside
+  it, scrolling independently.
+- The conversation comes from `comms.messages` (20 before the turn, 8 after) and is laid out as a
+  chat: driver on the left, everything outbound on the right, day separators, and the turn's own
+  message ringed. `agent` is a HUMAN operator and gets the loudest bubble — a human in the thread
+  is usually why the turn is worth reviewing. **English only**: `agent_text` is the canonical (a
+  translation on inbound rows) and `driver_text` holds the same message in the driver's language,
+  which is not shown.
+- **Links out to the systems that produced the turn** (`src/lib/turns/links.ts`, both hardcoded —
+  one production workspace each, no env): Chatwoot at
+  `app.chatwoot.com/app/accounts/125325/conversations/{chatwoot_conversation_id}`, and the n8n run
+  at `primary-production-1baf.up.railway.app/workflow/{n8n_workflow_id}/executions/{n8n_workflow_execution_id}`.
+  The workflow id comes from the **row**, never from a map keyed on `ai_name`: `deliveroo_v11` ran
+  across three workflows (12,683 on `CSLl2DJYtWLoxEpe`, 766 on the reactive agent's
+  `psRVRB3SWYm1hy34`, 212 on `keRoJ7hViqE5sekB`), so a name-based map would send ~978 legacy turns
+  to the wrong workflow. Live workflows: reactive `psRVRB3SWYm1hy34`, proactive
+  `xFPHqJmsWVMxz2KC`. All 32,040 rows carry both ids, so both links resolve on every turn.
+- `sop_agent` only exists from **2026-08-27** onward, so the SOP-gap flag is thin and grows. The
+  default 1-day window also keeps the retired `deliveroo_v11` turns out of the feed; widen the
+  range and they reappear, which is why every row shows its `ai_name`.
+- Routes: `GET /api/turns` (feed + counts; counts on the first page only), `GET /api/turns/[id]`.
+
 ## Conventions
 
 - Keep secrets server-side (above). This is the one rule that must not bend.
