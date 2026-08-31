@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 
 import type { PlatformRow } from "@/lib/sops/types";
@@ -16,6 +16,9 @@ import { MonitorTurnSkeleton } from "./skeletons";
 
 // Stable empty array so the "no platform" render doesn't hand the memoized feed a new [] each time.
 const NO_ROWS: TurnFeedRow[] = [];
+
+// `hydrated` below never changes after the first client pass, so it needs no real subscription.
+const NEVER_CHANGES = () => () => {};
 
 export function MonitorDashboard({
   platforms,
@@ -59,6 +62,18 @@ export function MonitorDashboard({
 
   const [detail, setDetail] = useState<TurnDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(initialTurnId != null);
+
+  // False during SSR and during the hydration render, true from the pass straight after — the
+  // sanctioned way to express "browser has taken over" without a setState in an effect body.
+  // The refresh button needs it: `loading` starts true, so the server emits a disabled button,
+  // and React compared that against the client and warned. Gating the attribute on this makes
+  // the server HTML and the first client render agree by construction, then disables it for real
+  // a tick later. Only `disabled` is gated — the spinner class matched fine on both passes.
+  const hydrated = useSyncExternalStore(
+    NEVER_CHANGES,
+    () => true,
+    () => false,
+  );
 
   // Only the newest feed request may write state — switching platform or range mid-flight would
   // otherwise let a slow earlier response overwrite the current one.
@@ -273,7 +288,7 @@ export function MonitorDashboard({
             <button
               type="button"
               onClick={refresh}
-              disabled={feedLoading}
+              disabled={hydrated && feedLoading}
               title="Refresh from database"
               aria-label="Refresh from database"
               className="grid size-7 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
