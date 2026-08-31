@@ -49,6 +49,18 @@ npm run dev     # http://localhost:3000
 npm run build   # also type-checks; build FAILS if server-only leaks to a client bundle
 ```
 
+`next.config.ts` turns off `experimental.reactDebugChannel` in dev. Next 16's React debug
+channel decides "this document came from the browser cache" by reading
+`performance.getEntriesByType("navigation")[0].transferSize === 0`; when it then can't restore
+the matching `sessionStorage` entry it calls `location.reload()`
+(`client/dev/debug-channel.js`). On `/` that read is 0 on every load here, so the reload
+re-enters the same check — a silent endless full-page reload loop (~1.6 loads a second, each a
+real `force-dynamic` server render, no console output at all). Cost of the switch: React's
+extra debug info in dev. Dev only — `next build`/`next start` keep the default.
+
+The auth gate lives in `src/proxy.ts` (Next 16's renamed `middleware` file convention: export
+`proxy`, Node.js runtime, a `runtime` config option throws).
+
 ## Structured SOPs (Anda only)
 
 Platform 1 (`anda`) has been rewritten to the house standard in

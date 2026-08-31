@@ -6,7 +6,10 @@ import type { Role } from "@/lib/auth/session";
 // Single authentication gate + Supabase session refresh. Pages → redirect to /login when not
 // authorized; API → 401 JSON. "Authorized" = a signed-in user with a role (viewer or admin);
 // per-route handlers still enforce admin for writes.
-export async function middleware(req: NextRequest) {
+//
+// This is the Next 16 `proxy` file convention — the renamed `middleware`. Same request hook,
+// but it defaults to the Node.js runtime and a `runtime` config option here throws.
+export async function proxy(req: NextRequest) {
   let res = NextResponse.next({ request: req });
 
   const supabase = createServerClient(
