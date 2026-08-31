@@ -161,6 +161,38 @@ tags) leaves a full snapshot in `ai_agent.knowledge_base_versions`, written by a
   no trace here, by design. Restore is admin-only and hidden when the version equals the live
   row.
 
+## Onboarding topics
+
+The **Onboarding** tab (`/onboarding`) shows and edits `ai_agent.onboarding_content` — the trainer
+curriculum the AI teaches new drivers, one row per step.
+
+- Columns: `title, order_index, content text[], final_checks text[], additional_context, urgency,
+  platform_id, product_id, mcq_id`. 147 rows: Yango (1) has 137 across 10 `crm.products`
+  curricula of 13-14 steps each; Deliveroo (8) has 10 rows with `product_id` null.
+- Nav is platform → curriculum (product, or the "All products" bucket for null `product_id`) →
+  ordered steps; search spans every curriculum on the platform.
+- **Two-stage load, like the SOP tab.** The page seeds only the shell: platforms, product names
+  and `listTopicIndexByPlatform` — the nav-only projection (no bodies, ~2 KB vs ~49 KB gzipped).
+  The bodies and the MCQs arrive from a background fetch on mount, so first paint costs one round
+  trip (~0.35 s of DB time against ~1.2 s for the full seed). A deep link already names its
+  platform, so its shell is fetched in parallel with the platform list instead of after it.
+  Anything needing a body (the view, the editor, body search) waits on the full corpus and shows
+  `OnboardingTopicSkeleton` meanwhile; the index rows are a subset of `OnboardingRow`, so the list
+  gains previews when the bodies land without any other change.
+- `content` and `final_checks` are `text[]`. `points-editor.tsx` edits them as one auto-growing box
+  per point: Enter splits, Backspace at the start merges up, Ctrl+↑/↓ reorders, a multi-line paste
+  spreads across points, and the highlighter button wraps the selection in `||…||`. No element may
+  contain a newline (none does, verified across the corpus), which is why Enter never inserts one.
+  "Edit as plain lines" is the escape hatch — the same two lists as raw textareas. Blank points are
+  dropped on save, not while typing. Bodies mark on-screen labels as `||Rider Support Chat||`;
+  `splitMarkup` in `src/lib/onboarding/types.ts` turns those into chips in the view.
+- `mcq_id` → `comms.mcq` — the quiz that verifies a step. Read-only here: the view renders the
+  question, choices and correct answer, and the editor only picks *which* MCQ is linked. The
+  picker offers the platform's MCQs plus the platform-less ones (30 of Anda's links are to those).
+- **No version history.** Unlike `knowledge_base`, this table has no snapshot trigger, so a save
+  or delete is final. Writes are admin-only (`requireApi(true)`); reads need viewer.
+- Routes: `GET|POST /api/onboarding`, `PATCH|DELETE /api/onboarding/[id]`, `GET /api/mcq`.
+
 ## Conventions
 
 - Keep secrets server-side (above). This is the one rule that must not bend.
