@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookText, ClipboardList, GraduationCap } from "lucide-react";
+import { Activity, BarChart3, BookText, ClipboardList, GraduationCap } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -11,10 +11,11 @@ const TABS = [
   { href: "/issues", label: "Issue lists", icon: ClipboardList },
   { href: "/onboarding", label: "Onboarding", icon: GraduationCap },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
+  { href: "/monitor", label: "Monitor", icon: Activity },
 ] as const;
 
-// Top-level switcher between the SOP knowledge base, the issue lists, the onboarding curricula
-// and the metrics view. The SOP dashboard keeps its state in window.history (pathname stays "/"),
+// Top-level switcher between the SOP knowledge base, the issue lists, the onboarding curricula,
+// the metrics view and the production monitor. The SOP dashboard keeps its state in window.history (pathname stays "/"),
 // so an exact match flags it active; the other tabs use a prefix match.
 export function NavTabs() {
   const pathname = usePathname();

@@ -150,3 +150,32 @@ export function OnboardingTopicSkeleton() {
     </div>
   );
 }
+
+// Monitor turn detail while it loads: the breadcrumb, a heading block, and the stacked sections
+// (why flagged → what the AI said → conversation) so the real content lands in place.
+export function MonitorTurnSkeleton() {
+  return (
+    <div className="flex h-full flex-col" aria-hidden>
+      <div className="flex items-center gap-2 border-b px-12 py-3">
+        <Bar className="h-3.5 w-24" />
+        <Bar className="h-3.5 w-20" />
+      </div>
+      <div className="max-w-4xl px-12 py-10">
+        <Bar className="h-6 w-3/5" />
+        <Bar className="mt-3 h-3 w-2/5 opacity-70" />
+        <div className="mt-8 space-y-8">
+          {[3, 2, 4].map((lines, section) => (
+            <div key={section}>
+              <Bar className="h-2.5 w-24 opacity-70" />
+              <div className="mt-3 space-y-2">
+                {Array.from({ length: lines }).map((_, i) => (
+                  <Bar key={i} className={`h-9 ${i % 3 === 2 ? "w-2/3" : "w-full"}`} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
