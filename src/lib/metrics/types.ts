@@ -65,8 +65,15 @@ export interface ResponseRate {
     response_window_hours: number;
     min_occasions: number;
     platform_ids: number[] | null;
+    // Set when the call narrowed both sides of the rate to these crm.drivers.driver_type
+    // values (new/active/churn/archive); null for the whole roster.
+    driver_types: string[] | null;
   };
   platform_ids_in_result: number[];
+  // Both null unless `driver_types` narrowed the scope: the size of that cohort, and how much
+  // of it exists in comms at all. Neither feeds rate_pct.
+  scope_total_drivers: number | null;
+  scope_drivers_with_conversation: number | null;
   total_coached_drivers: number;
   total_engaged_drivers: number;
   rate_pct: number;
@@ -162,6 +169,7 @@ export interface MedianOutreach {
 // The metric ids the proxy route accepts, in display order. Mirrors METRIC_PATHS in api.ts.
 export const METRIC_IDS = [
   "response-rate",
+  "active-driver-response-rate",
   "sustained-engagement",
   "avg-time-to-respond",
   "outreach-response-rate",
@@ -174,6 +182,9 @@ export type MetricId = (typeof METRIC_IDS)[number];
 // Map each metric id to its response type, so the client can type the bundle it loads.
 export interface MetricResponses {
   "response-rate": ResponseRate;
+  // Same endpoint and same shape as "response-rate" — it is that metric called with
+  // driver_type=active, not a second calculation.
+  "active-driver-response-rate": ResponseRate;
   "sustained-engagement": SustainedEngagement;
   "avg-time-to-respond": AvgTimeToRespond;
   "outreach-response-rate": OutreachResponseRate;

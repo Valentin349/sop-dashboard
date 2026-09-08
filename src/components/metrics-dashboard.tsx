@@ -21,11 +21,13 @@ import { cn } from "@/lib/utils";
 // "lifetime" aggregates the API computes ignoring both (outreach-response-rate, median-outreach).
 const DATE_METRICS = new Set<MetricId>([
   "response-rate",
+  "active-driver-response-rate",
   "sustained-engagement",
   "avg-time-to-respond",
 ]);
 const PLATFORM_METRICS = new Set<MetricId>([
   "response-rate",
+  "active-driver-response-rate",
   "sustained-engagement",
   "avg-time-to-respond",
   "ai-acceptance-rate",
@@ -34,6 +36,7 @@ const PLATFORM_METRICS = new Set<MetricId>([
 // The metrics that expose a per-agent × platform breakdown table.
 const BREAKDOWN_METRICS: { id: MetricId; label: string }[] = [
   { id: "response-rate", label: "Response rate" },
+  { id: "active-driver-response-rate", label: "Active drivers" },
   { id: "sustained-engagement", label: "Sustained engagement" },
   { id: "avg-time-to-respond", label: "Avg time to respond" },
   { id: "ai-acceptance-rate", label: "AI acceptance" },
@@ -259,6 +262,8 @@ interface Card {
   // Short label next to the headline number clarifying what statistic it is (e.g. "median").
   valueNote?: string;
   sub: string;
+  // Extra line under the target — used where the headline needs a caveat the sub can't carry.
+  note?: string;
   target?: string;
   meets?: boolean;
   error?: string;
@@ -272,11 +277,17 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
   });
 
   const rr = data["response-rate"] as ResponseRate | undefined;
+  // Same type as `rr` — it is the response-rate metric scoped to driver_type=active.
+  const ad = data["active-driver-response-rate"] as ResponseRate | undefined;
   const se = data["sustained-engagement"] as SustainedEngagement | undefined;
   const at = data["avg-time-to-respond"] as AvgTimeToRespond | undefined;
   const or = data["outreach-response-rate"] as OutreachResponseRate | undefined;
   const ai = data["ai-acceptance-rate"] as AiAcceptanceRate | undefined;
   const mo = data["median-outreach"] as MedianOutreach | undefined;
+
+  // Size of the active cohort; 0 or absent means the platform doesn't use driver_type at
+  // all — every row there is `archive`.
+  const adFleet = ad?.scope_total_drivers ?? 0;
 
   return [
     card("response-rate", {
@@ -288,6 +299,23 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
         : "",
       target: rr ? `≥ ${rr.kpi_target_pct}%` : undefined,
       meets: rr?.meets_kpi,
+    }),
+    card("active-driver-response-rate", {
+      title: "Active driver response rate",
+      scope: "Period",
+      // A platform with nobody marked active (everyone but Yango) would otherwise render a
+      // hard 0.0% "Below target" off an empty denominator. Say there is no active fleet instead.
+      value: !ad ? "\u2014" : !adFleet ? "n/a" : fmtPct(ad.rate_pct),
+      sub: !ad
+        ? ""
+        : !adFleet
+          ? "No drivers marked active on this platform"
+          : `${fmtInt(ad.total_engaged_drivers)} / ${fmtInt(ad.total_coached_drivers)} active drivers engaged`,
+      note: adFleet
+        ? `${fmtInt(ad!.scope_drivers_with_conversation ?? 0)} of ${fmtInt(adFleet)} active drivers have a conversation · active is today's driver_type, applied over the period`
+        : undefined,
+      target: adFleet ? `\u2265 ${ad!.kpi_target_pct}%` : undefined,
+      meets: adFleet ? ad!.meets_kpi : undefined,
     }),
     card("sustained-engagement", {
       title: "Sustained engagement",
@@ -390,6 +418,9 @@ function KpiCard({ card, loading }: { card: Card; loading: boolean }) {
             )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{card.sub}</p>
+          {card.note && (
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground/80">{card.note}</p>
+          )}
           {card.target && (
             <p className="mt-2 text-[11px] text-muted-foreground">Target {card.target}</p>
           )}
@@ -405,6 +436,10 @@ function KpiCard({ card, loading }: { card: Card; loading: boolean }) {
 // where each cell's data will be.
 const BREAKDOWN_COLUMNS: Record<string, { headers: string[]; numericFrom: number }> = {
   "response-rate": {
+    headers: ["Agent", "Platform", "Coached", "Engaged", "Rate"],
+    numericFrom: 2,
+  },
+  "active-driver-response-rate": {
     headers: ["Agent", "Platform", "Coached", "Engaged", "Rate"],
     numericFrom: 2,
   },
@@ -437,8 +472,10 @@ function buildRows(metricId: MetricId, data: DataMap): Row[] | null {
   const platName = (n: string | null, id: number | null) => n ?? (id != null ? `#${id}` : "—");
 
   switch (metricId) {
-    case "response-rate": {
-      const d = data["response-rate"];
+    case "response-rate":
+    case "active-driver-response-rate": {
+      // Both metrics return ResponseRateAgentPlatform rows, so one arm covers them.
+      const d = data[metricId];
       if (!d) return null;
       return d.per_agent_platform.map((r, i) => ({
         key: `${r.agent_id}-${r.platform_id}-${i}`,

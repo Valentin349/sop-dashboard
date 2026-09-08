@@ -16,7 +16,7 @@ export default function Loading() {
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {/* KPI cards */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="rounded-lg border bg-card p-4">
               <div className="h-3 w-24 animate-pulse rounded bg-muted-foreground/15" />
               <div className="mt-3 h-8 w-28 animate-pulse rounded bg-muted-foreground/15" />
