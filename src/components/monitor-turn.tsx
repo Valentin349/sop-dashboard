@@ -9,7 +9,10 @@ import { sopHref } from "@/lib/sops/nav";
 import { chatwootUrl, n8nExecutionUrl } from "@/lib/turns/links";
 import {
   flagDetails,
+  gapExplanation,
+  gapTopic,
   humanizeReason,
+  parseSopQuery,
   parseSupportRef,
   summaryForTurn,
   type TranscriptMessage,
@@ -251,6 +254,18 @@ export const MonitorTurn = memo(function MonitorTurn({
     ),
   ];
 
+  // What retrieval produced, in one line — the per-SOP notes live under "SOP retrieval", so this
+  // says how many there are to read rather than repeating them.
+  const picks = sop?.sops ?? [];
+  const bundled = sop?.bundle_sop_ids ?? [];
+  const searchCount = sop?.search_count ?? sop?.queries?.length ?? 0;
+  const retrievalNote =
+    picks.length === 0
+      ? `${searchCount} search${searchCount === 1 ? "" : "es"} returned no SOP at all.`
+      : bundled.length === 0
+        ? `${picks.length} SOP${picks.length === 1 ? "" : "s"} came back and none were used — why each was rejected is under SOP retrieval.`
+        : `${bundled.length} of ${picks.length} retrieved SOPs were used — what each does and doesn't answer is under SOP retrieval.`;
+
   const chatwoot = chatwootUrl(turn.chatwoot_conversation_id);
   // Built from the row's own workflow id, so a legacy turn links to the workflow it actually ran on.
   const n8n = n8nExecutionUrl(turn.n8n_workflow_id, turn.n8n_workflow_execution_id);
@@ -413,6 +428,26 @@ export const MonitorTurn = memo(function MonitorTurn({
                       coverage: {sop.coverage}
                       {sop.gap_reason ? ` · ${sop.gap_reason}` : ""}
                     </p>
+                    {/* The verdict is a machine string, and `partial` never carries a reason at
+                        all, so say what it means rather than repeating the badge. */}
+                    {gapExplanation(sop.coverage, sop.gap_reason) && (
+                      <p className="mt-2 text-[12px] leading-relaxed text-foreground/85">
+                        {gapExplanation(sop.coverage, sop.gap_reason)}
+                      </p>
+                    )}
+                    {/* On a gap with nothing retrieved this is the whole finding: the topic no
+                        SOP covers, in the agent's own words. */}
+                    {gapTopic(sop.queries) && (
+                      <p className="mt-2 text-[12px] leading-relaxed text-foreground/85">
+                        <span className="text-violet-900/70 dark:text-violet-300/70">
+                          Searched for:{" "}
+                        </span>
+                        {gapTopic(sop.queries)}
+                      </p>
+                    )}
+                    <p className="mt-2 text-[12px] text-violet-900/80 dark:text-violet-300/80">
+                      {retrievalNote}
+                    </p>
                     {sop.escalate_summary && (
                       <p className="mt-2 text-[12px] text-foreground/85">{sop.escalate_summary}</p>
                     )}
@@ -430,16 +465,44 @@ export const MonitorTurn = memo(function MonitorTurn({
             {sop && (
               <section>
                 <SectionLabel>SOP retrieval</SectionLabel>
+                {/* The stored query is one blob of `latest:/context:/keywords:`; split it, because
+                    the context line is the agent's own reading of what the driver needs and is
+                    what a missing SOP would have to cover. An unstructured query falls back to
+                    the whole string as the context. */}
                 {(sop.queries ?? []).length > 0 && (
                   <div className="mb-3 space-y-1.5">
-                    {(sop.queries ?? []).map((q, i) => (
-                      <p
-                        key={i}
-                        className="whitespace-pre-wrap rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-muted-foreground"
-                      >
-                        {q}
-                      </p>
-                    ))}
+                    {(sop.queries ?? []).map((q, i) => {
+                      const parsed = parseSopQuery(q);
+                      return (
+                        <div key={i} className="rounded-md bg-muted/60 px-2.5 py-2">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                            Search {i + 1}
+                          </p>
+                          {parsed.context && (
+                            <p className="mt-1 text-[12px] leading-relaxed text-foreground/85">
+                              {parsed.context}
+                            </p>
+                          )}
+                          {parsed.latest && (
+                            <p className="mt-1 text-[11px] italic leading-relaxed text-muted-foreground">
+                              “{parsed.latest}”
+                            </p>
+                          )}
+                          {parsed.keywords.length > 0 && (
+                            <p className="mt-1.5 flex flex-wrap gap-1">
+                              {parsed.keywords.map((k, j) => (
+                                <span
+                                  key={j}
+                                  className="rounded-[3px] border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                                >
+                                  {k}
+                                </span>
+                              ))}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {(sop.sops ?? []).length === 0 ? (

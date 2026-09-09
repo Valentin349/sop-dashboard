@@ -238,6 +238,16 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   code (with an acronym pass, so `branch_not_in_sop` → "Branch not in SOP"). Validation errors run
   to 201 chars, so `shortenError` cuts the badge at the first `;`/`--` and caps it at 64 — 177
   distinct badge labels across the corpus, none longer.
+- **A coverage verdict is explained, not just named.** `partial` never carries a `gap_reason`
+  (411/411 live rows) and `gap`'s three codes are machine strings, so `gapExplanation` pairs each
+  verdict with one sentence saying what it means — on the badge's tooltip and in the "Why flagged"
+  block. A gap hands the model nothing (0 of 393 gap turns have a non-empty `bundle_sop_ids`), so
+  the block also says what retrieval produced instead: no SOP at all, or N retrieved and rejected,
+  with the per-SOP notes left to the SOP-retrieval rail rather than repeated. `sop_agent.queries`
+  are `latest:/context:/keywords:` blobs (1,087 of 1,214 on flagged rows; the rest a bare
+  sentence) — `parseSopQuery` splits them, and the `context` line is the agent's own reading of
+  what the driver needed, i.e. the topic a missing SOP would have to cover. Every flagged row
+  yields one (`gapTopic`, 804/804).
 - **The headline renders only when it adds something** (`headlineAddsDetail`, 22% of rows): an
   escalation has the model's prose summary and a validation failure has the clause the badge
   truncated, but a gap or a retry would just restate its badge. Suppression is on exact equality,

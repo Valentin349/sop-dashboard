@@ -228,6 +228,77 @@ export function firstValidationError(v: ValidationResult | null): string | null 
   return null;
 }
 
+// ── Why a turn was flagged for SOP coverage ───────────────────────────────────
+// `coverage` and `gap_reason` are machine strings, and `partial` never carries a reason at all
+// (411 of 411 live partial turns have gap_reason null), so on those rows the panel could only
+// repeat the badge back. These sentences say what the verdict actually means. The claim that a
+// gap handed the model nothing is a fact of the corpus, not a guess: no gap turn has a non-empty
+// bundle_sop_ids (0 of 393).
+const GAP_EXPLANATION: Record<string, string> = {
+  retrieved_off_topic:
+    "The searches came back about something else — no SOP on the driver's topic reached the model.",
+  branch_not_in_sop:
+    "A SOP covers the topic but not this driver's branch of it, so none was handed to the model.",
+  action_request_not_procedure:
+    "The driver asked for something to be done rather than for a procedure, which no SOP describes.",
+};
+
+export function gapExplanation(
+  coverage: string | null,
+  gapReason: string | null,
+): string | null {
+  if (coverage === "partial") {
+    return "The SOPs handed to the model cover the topic but not the driver's exact case — the reply is built on a partial match.";
+  }
+  if (coverage !== "gap") return null;
+  return (
+    GAP_EXPLANATION[gapReason ?? ""] ??
+    "The SOP agent found nothing it could use, so the model answered without a SOP."
+  );
+}
+
+// One search the SOP agent ran. The stored string is written by the model as
+// `latest: "…" context: "…" keywords: a, b, c` (1,146 of 1,204 live queries); the other 58 are a
+// bare sentence, which parses as the context so nothing is lost.
+export interface SopQuery {
+  // The driver message that triggered the search.
+  latest: string | null;
+  // The agent's own summary of the situation it searched for — the topic a gap is a gap in.
+  context: string | null;
+  keywords: string[];
+  raw: string;
+}
+
+const QUERY_SHAPE = /^latest:\s*([\s\S]*?)\s*context:\s*([\s\S]*?)\s*keywords:\s*([\s\S]*)$/;
+
+function unquote(text: string): string {
+  return text.trim().replace(/^"|"$/g, "").trim();
+}
+
+export function parseSopQuery(raw: string): SopQuery {
+  const text = (raw ?? "").trim();
+  const m = QUERY_SHAPE.exec(text);
+  if (!m) return { latest: null, context: text || null, keywords: [], raw: text };
+  return {
+    latest: unquote(m[1]) || null,
+    context: unquote(m[2]) || null,
+    keywords: unquote(m[3])
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean),
+    raw: text,
+  };
+}
+
+// The topic the flag is about: the last search is the most refined one the agent ran.
+export function gapTopic(queries: string[] | null | undefined): string | null {
+  const parsed = (queries ?? []).map(parseSopQuery);
+  for (let i = parsed.length - 1; i >= 0; i--) {
+    if (parsed[i].context) return parsed[i].context;
+  }
+  return null;
+}
+
 // What each of a turn's flags actually says. The badge shows `label` (the specific reason) and
 // takes its colour from `flag` (the category) — the filter chips above the feed double as the
 // colour legend, so the category never needs spelling out twice.
@@ -236,6 +307,8 @@ export interface FlagDetail {
   label: string;
   // The underlying machine string, when the label is a prettified version of one.
   code: string | null;
+  // One sentence saying what the flag means, where the label alone is a verdict without a why.
+  hint?: string | null;
 }
 
 export function flagDetails(row: TurnFeedRow): FlagDetail[] {
@@ -265,7 +338,12 @@ export function flagDetails(row: TurnFeedRow): FlagDetail[] {
     const label =
       humanizeReason(row.gap_reason) ??
       (row.coverage === "partial" ? "Partial SOP coverage" : "SOP gap");
-    out.push({ flag: "sop_gap", label, code: row.gap_reason });
+    out.push({
+      flag: "sop_gap",
+      label,
+      code: row.gap_reason,
+      hint: gapExplanation(row.coverage, row.gap_reason),
+    });
   }
   return out;
 }

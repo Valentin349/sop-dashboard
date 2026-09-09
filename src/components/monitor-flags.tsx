@@ -48,9 +48,17 @@ export function FlagBadge({
   detail: FlagDetail;
   className?: string;
 }) {
+  // Category, then the raw machine code, then the sentence explaining the verdict — a SOP-gap
+  // badge names a verdict ("Partial SOP coverage") that says nothing on its own.
+  const title = [
+    detail.code ? `${FLAG_LABELS[detail.flag]} — ${detail.code}` : FLAG_LABELS[detail.flag],
+    detail.hint,
+  ]
+    .filter(Boolean)
+    .join("\n");
   return (
     <span
-      title={detail.code ? `${FLAG_LABELS[detail.flag]} — ${detail.code}` : FLAG_LABELS[detail.flag]}
+      title={title}
       className={cn(
         "inline-block max-w-full truncate rounded-[3px] border px-1.5 py-0.5 text-[10px] font-medium leading-normal",
         FLAG_CHIP[detail.flag],
