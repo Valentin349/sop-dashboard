@@ -280,7 +280,61 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
 - `sop_agent` only exists from **2026-08-27** onward, so the SOP-gap flag is thin and grows. The
   default 1-day window also keeps the retired `deliveroo_v11` turns out of the feed; widen the
   range and they reappear, which is why every row shows its `ai_name`.
-- Routes: `GET /api/turns` (feed + counts; counts on the first page only), `GET /api/turns/[id]`.
+- **The period summary is the other half of the tab.** The feed answers "which turns went
+  wrong"; `monitor-summary.tsx` answers "how did the AI do over this range", and takes the main
+  column whenever no turn is selected (the chart button in the sidebar header and the "Metrics"
+  crumb at the top of an open turn both put it back — both are `setTurnId(null)`). It
+  is the headline of the `sop-gap-report` skill in `driver-context-manager`, computed live: four
+  KPI cards (no relevant SOP found, branch missing, escalated to a human, topics closed by the AI —
+  conversations big, turns and the share of turns they are underneath — the two SOP cards divide by
+  the turns the SOP agent checked, the other two by every turn) over the covered/partial/
+  gap table and a donut of the conversation split, in the Metrics tab's card and table vocabulary
+  so the two tabs read as one dashboard. `summarizeTurns` also returns the gap-reason and escalation-reason
+  breakdowns, which the panel does not render — they come free with the same scan.
+- **The donut is over TURNS, not conversations.** The three verdicts are exclusive per turn, so
+  they add to `scored.turns`. Conversation counts do not add up — one conversation can hold a
+  covered turn and a gap turn and is counted in both rows — so they stay a table column and are
+  never pied. (An earlier version filed each conversation under its worst turn to force a
+  partition; that read 57% gap for 1–10 Sep against 13% of turns, because one gap turn painted a
+  whole coaching thread. Removed.)
+- **Acknowledgement turns are dropped from the whole coverage picture**, not just one card: a gap
+  verdict on "thank you" / "ok" / "Block" is a property of the conversation, not a hole in the
+  corpus. `isNoAskTurn` (types.ts) is the SOP gap report's test — the driver's last message is ≤4
+  words, or the agent's own `context:` line reads as an acknowledgement — run over
+  `sop_agent.queries`, which carries both without pulling `context_manager_output`. Only gap turns
+  are tested (`scanGapTurns`, a few hundred rows a week); a short message on a covered turn is a
+  real ask. `summary.acknowledgements` reports how many were set aside, and the panel says so.
+  Live effect, 1–10 Sep: 119 turns out, gap 293 → 174, "no relevant SOP" 234 → 126.
+- **Counted in turns AND conversations.** Ten turns in one conversation are one signal, which is
+  how the gap report weighs evidence, and PostgREST cannot count distinct — so `summarizeTurns`
+  scans the range once on a light projection (jsonb paths only, ~30 KB a day, ~200 KB a week;
+  0.6 s and 1.6 s) instead of firing count queries. A conversation can land in several rows, so
+  the shares don't add to 100% and the panel says so.
+- **"No relevant SOP found" is the agent's own verdict**, not a derived marker: coverage `gap`
+  with `gap_reason = retrieved_off_topic`. Its siblings are different findings and are not folded
+  in — `branch_not_in_sop` is a SOP that exists and fell short (its own card),
+  `action_request_not_procedure` is an ask no procedure covers. The pipeline rewrites a verdict
+  whose picks are all low-confidence into exactly this state
+  (`coverage_claimed_with_only_low_confidence_sops`), so those land here too. It comes free with
+  the scan — no extra query.
+- **It reads high, and that is the corpus, not a bug.** Roughly 45% of these turns are turns where
+  the driver asked nothing — "Block", "It was calm", a thank-you — measured over 1–9 Sep 2026:
+  101 of 223. The SOP agent still returns `gap` because there was nothing to retrieve *for*. The
+  gap report separates those with a no-ask test over `context_manager_output`; the panel does not,
+  by decision — the card counts the agent's verdicts as issued.
+- **Topics closed by the AI** = turns carrying a `resolve_topic` op in `ai_output.topic_writes`
+  (one `cs` filter). Topics auto-closed for inactivity or staleness are written by a job, not a
+  turn, so none of them are counted (0 live) — which is what makes this a proxy for the AI
+  actually finishing something rather than a cleanup total. It is per turn, so a turn that closed
+  two subjects counts once.
+- Escalations are reported twice on purpose: `action.type = escalate_to_human` (a person was
+  pulled in) and `sop_agent.escalate` (the SOP agent asked for one). The counts differ.
+- Gap counts include turns where the driver asked nothing (a thank-you, an "ok"). Separating
+  those needs `context_manager_output`, which the scan does not carry; the panel says so.
+- The summary ignores the flag chips — they narrow the feed, not the period — so it is its own
+  request with its own loading flag, refetched only when platform, dates or refresh move.
+- Routes: `GET /api/turns` (feed + counts; counts on the first page only), `GET /api/turns/[id]`,
+  `GET /api/turns/summary` (the period summary; viewer).
 
 ## Conventions
 

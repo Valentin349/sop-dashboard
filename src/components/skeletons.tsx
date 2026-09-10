@@ -179,3 +179,55 @@ export function MonitorTurnSkeleton() {
     </div>
   );
 }
+
+// Monitor period summary while its scan runs. Mirrors the real panel: the meta line, the four
+// KPI cards, then the coverage table beside the donut card — same widths and card chrome, so
+// nothing moves when the numbers land.
+export function MonitorSummarySkeleton() {
+  return (
+    <div className="w-full px-8 py-8" aria-hidden>
+      <Bar className="h-3 w-72 opacity-70" />
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-lg border bg-card p-4">
+            <Bar className="h-3 w-2/3 opacity-70" />
+            <Bar className="mt-2 h-7 w-16" />
+            <Bar className="mt-2 h-3 w-4/5 opacity-70" />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="flex items-center gap-3 border-b px-3 py-2.5">
+            <Bar className="h-3 w-32 opacity-70" />
+            <Bar className="ml-auto h-3 w-10 opacity-70" />
+            <Bar className="h-3 w-20 opacity-70" />
+          </div>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+              <Bar className="h-3.5 w-1/2" />
+              <Bar className="ml-auto h-3.5 w-10" />
+              <Bar className="h-3.5 w-12" />
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg border bg-card p-4">
+          <Bar className="h-3 w-32 opacity-70" />
+          <div className="mt-3 flex items-center gap-4">
+            <div className="size-32 shrink-0 animate-pulse rounded-full border-[16px] border-foreground/10" />
+            <div className="min-w-0 flex-1 space-y-2">
+              {[0, 1, 2].map((i) => (
+                <Bar key={i} className="h-3 w-full" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Bar className="mt-2 h-3 w-3/5 opacity-70" />
+    </div>
+  );
+}

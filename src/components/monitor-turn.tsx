@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import { ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 
 import { issueHref } from "@/lib/issues/nav";
 import { sopHref } from "@/lib/sops/nav";
@@ -233,9 +233,13 @@ function OutLink({ href, children }: { href: string; children: React.ReactNode }
 export const MonitorTurn = memo(function MonitorTurn({
   detail,
   platformName,
+  onBack,
 }: {
   detail: TurnDetail;
   platformName: string;
+  // Back to the range's metrics — the same deselection the sidebar's chart button does. Passed
+  // as a stable callback so the memo still holds.
+  onBack: () => void;
 }) {
   const { turn, transcript } = detail;
   const details = flagDetails(turn);
@@ -274,6 +278,16 @@ export const MonitorTurn = memo(function MonitorTurn({
     <div className="flex h-full flex-col">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 border-b px-8 py-3 text-[13px] text-muted-foreground">
+        <button
+          type="button"
+          onClick={onBack}
+          title="Back to the metrics for this range"
+          className="-ml-1.5 inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <ChevronLeft className="size-3.5 opacity-60" />
+          Metrics
+        </button>
+        <ChevronRight className="size-3.5 opacity-60" />
         <span>{platformName}</span>
         <ChevronRight className="size-3.5 opacity-60" />
         <span className="min-w-0 shrink-0 truncate font-medium text-foreground">

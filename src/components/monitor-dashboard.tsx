@@ -1,18 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Activity, RefreshCw } from "lucide-react";
+import { ChartColumn, RefreshCw } from "lucide-react";
 
 import type { PlatformRow } from "@/lib/sops/types";
 import { monitorHref } from "@/lib/turns/nav";
-import type { FlagCounts, TurnDetail, TurnFeedRow, TurnFlag } from "@/lib/turns/types";
+import type {
+  FlagCounts,
+  TurnDetail,
+  TurnFeedRow,
+  TurnFlag,
+  TurnSummary,
+} from "@/lib/turns/types";
 import { cn } from "@/lib/utils";
 import { TopBarCenter } from "./top-bar-center";
 import { PlatformSwitcher } from "./platform-switcher";
 import { FlagFilter } from "./monitor-flags";
 import { MonitorFeed } from "./monitor-feed";
+import { MonitorSummary } from "./monitor-summary";
 import { MonitorTurn } from "./monitor-turn";
-import { MonitorTurnSkeleton } from "./skeletons";
+import { MonitorSummarySkeleton, MonitorTurnSkeleton } from "./skeletons";
 
 // Stable empty array so the "no platform" render doesn't hand the memoized feed a new [] each time.
 const NO_ROWS: TurnFeedRow[] = [];
@@ -63,6 +70,17 @@ export function MonitorDashboard({
   const [detail, setDetail] = useState<TurnDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(initialTurnId != null);
 
+  // The period summary. It answers a different question than the feed ("how did the AI do over
+  // this range" rather than "which turns went wrong"), costs a scan of the range, and does not
+  // depend on the flag chips — so it is its own request, refetched only when the range or the
+  // platform moves.
+  const [summary, setSummary] = useState<TurnSummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  // Set by whatever invalidates the range (platform, dates, refresh) and cleared by the fetch
+  // that answers it — the same shape as `loading` above, and for the same reason: a setState in
+  // the effect body would cascade a second render. Not touched by the flag chips.
+  const [summaryLoading, setSummaryLoading] = useState(true);
+
   // False during SSR and during the hydration render, true from the pass straight after — the
   // sanctioned way to express "browser has taken over" without a setState in an effect body.
   // The refresh button needs it: `loading` starts true, so the server emits a disabled button,
@@ -79,6 +97,7 @@ export function MonitorDashboard({
   // otherwise let a slow earlier response overwrite the current one.
   const feedToken = useRef(0);
   const detailToken = useRef(0);
+  const summaryToken = useRef(0);
 
   const syncUrl = useCallback(
     (next: {
@@ -143,6 +162,32 @@ export function MonitorDashboard({
       });
   }, [platformId, params, nonce]);
 
+  // The range's summary, fetched beside the feed. Flags are absent from the dependency list on
+  // purpose: narrowing the feed does not narrow the period being described.
+  useEffect(() => {
+    if (platformId == null) return;
+    const token = ++summaryToken.current;
+
+    const sp = new URLSearchParams({ platform: String(platformId), from, to });
+    fetch(`/api/turns/summary?${sp}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (summaryToken.current !== token) return;
+        if (data.error) {
+          setSummaryError(String(data.error));
+          return;
+        }
+        setSummaryError(null);
+        setSummary(data as TurnSummary);
+      })
+      .catch((e: Error) => {
+        if (summaryToken.current === token) setSummaryError(e.message);
+      })
+      .finally(() => {
+        if (summaryToken.current === token) setSummaryLoading(false);
+      });
+  }, [platformId, from, to, nonce]);
+
   // Load the selected turn's detail. Deep links land here on mount with a turn already chosen.
   useEffect(() => {
     // Deselection is derived at render, not written here (see the effect above).
@@ -182,6 +227,7 @@ export function MonitorDashboard({
   const selectPlatform = useCallback(
     (pid: number) => {
       setLoading(true);
+      setSummaryLoading(true);
       setPlatformId(pid);
       setTurnId(null);
       syncUrl({ platform: pid, turn: null });
@@ -198,6 +244,12 @@ export function MonitorDashboard({
     [syncUrl],
   );
 
+  // Deselecting a turn is what puts the period summary back in the main column.
+  const showSummary = useCallback(() => {
+    setTurnId(null);
+    syncUrl({ turn: null });
+  }, [syncUrl]);
+
   const changeFlags = useCallback(
     (next: TurnFlag[]) => {
       setLoading(true);
@@ -210,6 +262,7 @@ export function MonitorDashboard({
   const changeFrom = useCallback(
     (v: string) => {
       setLoading(true);
+      setSummaryLoading(true);
       setFrom(v);
       syncUrl({ from: v });
     },
@@ -219,6 +272,7 @@ export function MonitorDashboard({
   const changeTo = useCallback(
     (v: string) => {
       setLoading(true);
+      setSummaryLoading(true);
       setTo(v);
       syncUrl({ to: v });
     },
@@ -227,6 +281,7 @@ export function MonitorDashboard({
 
   const refresh = useCallback(() => {
     setLoading(true);
+    setSummaryLoading(true);
     setNonce((n) => n + 1);
   }, []);
 
@@ -287,6 +342,16 @@ export function MonitorDashboard({
             </p>
             <button
               type="button"
+              onClick={showSummary}
+              disabled={turnId == null}
+              title="How the AI did over this range"
+              aria-label="How the AI did over this range"
+              className="grid size-7 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              <ChartColumn className="size-3.5" />
+            </button>
+            <button
+              type="button"
               onClick={refresh}
               disabled={hydrated && feedLoading}
               title="Refresh from database"
@@ -312,21 +377,30 @@ export function MonitorDashboard({
         )}
       </aside>
 
-      {/* Right — the selected turn */}
+      {/* Right — the selected turn, or the period summary when nothing is selected */}
       <section className="flex min-w-0 flex-1 flex-col bg-background">
         <div className="min-h-0 flex-1">
           {shownDetailLoading ? (
             <MonitorTurnSkeleton />
           ) : shownDetail ? (
-            <MonitorTurn detail={shownDetail} platformName={platformName} />
+            <MonitorTurn detail={shownDetail} platformName={platformName} onBack={showSummary} />
+          ) : platformId != null && summaryLoading ? (
+            <MonitorSummarySkeleton />
+          ) : summaryError ? (
+            <p className="px-12 py-10 text-[13px] text-red-600 dark:text-red-400">
+              {summaryError}
+            </p>
+          ) : summary ? (
+            <MonitorSummary
+              summary={summary}
+              platformName={platformName}
+              from={from}
+              to={to}
+            />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-12 text-center">
-              <Activity className="size-7 text-muted-foreground/60" strokeWidth={1.5} />
-              <p className="max-w-xs text-sm text-muted-foreground">
-                Pick a flagged turn to see what the AI did, why it was flagged, and the
-                conversation around it.
-              </p>
-            </div>
+            <p className="px-12 py-10 text-[13px] text-muted-foreground">
+              Pick a platform to see how the AI did.
+            </p>
           )}
         </div>
       </section>

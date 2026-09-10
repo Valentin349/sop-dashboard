@@ -290,6 +290,24 @@ export function parseSopQuery(raw: string): SopQuery {
   };
 }
 
+// A gap verdict on a turn with nothing to retrieve FOR — a thank-you, an "ok", a positive
+// check-in. The SOP agent searches on every reactive turn (all 1,467 scored turns in 1–10 Sep
+// ran at least one pass), so "it searched and found nothing" includes turns where no SOP was
+// ever the answer. Same test the SOP gap report uses to keep those out of its evidence: the
+// driver's last message is four words or fewer, or the agent's own reading of the situation
+// says acknowledgement. Read off `sop_agent.queries` — the only place the driver's words and the
+// agent's reading are both available without pulling the whole context blob.
+const NO_ASK =
+  /thank|acknowledg|positive (reply|response|update|check|mood|answer)|no (new )?(question|request|problem|ask)|nothing to report|closing|greet|farewell|no problem reported|confirms? .*(resolved|fixed|back online|working)/i;
+
+export function isNoAskTurn(queries: string[] | null | undefined): boolean {
+  const parsed = (queries ?? []).map(parseSopQuery);
+  const latest = parsed.find((p) => p.latest)?.latest ?? "";
+  const words = latest.split(/\s+/).filter(Boolean).length;
+  if (words > 0 && words <= 4) return true;
+  return parsed.some((p) => p.context != null && NO_ASK.test(p.context));
+}
+
 // The topic the flag is about: the last search is the most refined one the agent ran.
 export function gapTopic(queries: string[] | null | undefined): string | null {
   const parsed = (queries ?? []).map(parseSopQuery);
@@ -400,4 +418,57 @@ export function parseSupportRef(raw: string | null): SupportRef {
   if (!m || !kind) return { kind: "other", id: null, raw: s };
   const n = Number(m[2]);
   return { kind, id: Number.isInteger(n) ? n : null, raw: s };
+}
+
+// ── Period summary ────────────────────────────────────────────────────────────
+// The Monitor feed answers "which turns went wrong"; the summary answers "how did the AI do
+// over this range" — the proxies the SOP gap report's headline table is built from
+// (driver-context-manager/.claude/skills/sop-gap-report). It describes the whole range and
+// ignores the flag chips: those narrow the feed, not the period.
+//
+// Everything is counted twice, in turns and in CONVERSATIONS, because ten turns in one
+// conversation are one signal — the same rule the gap report weighs its evidence by.
+export interface TurnTally {
+  turns: number;
+  conversations: number;
+}
+
+export interface TurnBreakdown extends TurnTally {
+  // A machine string (a gap_reason, an action.reason) — humanizeReason() for display.
+  code: string;
+}
+
+export interface TurnSummary {
+  turns: number;
+  conversations: number;
+  // Turns the SOP agent ran on: null before 2026-08-27 and on every proactive turn, so the
+  // coverage buckets below are shares of THIS, not of `turns`.
+  scored: TurnTally;
+  // Gap turns left out of every figure above: the driver asked nothing (a thank-you, an "ok", a
+  // positive check-in), so the search came back empty-handed on a turn no SOP was needed for.
+  // Counting them would make the corpus look full of holes it does not have. They are reported
+  // rather than hidden — see isNoAskTurn.
+  acknowledgements: TurnTally;
+  covered: TurnTally;
+  partial: TurnTally;
+  gap: TurnTally;
+  gapReasons: TurnBreakdown[];
+  // A human was actually pulled in (ai_output.action.type = escalate_to_human).
+  escalated: TurnTally;
+  escalationReasons: TurnBreakdown[];
+  // The SOP agent ASKED for a human. Not the same event: the reactive agent decides, and the
+  // two counts differ, so both are reported rather than blurred into one "escalations" figure.
+  sopAgentAskedForHuman: TurnTally;
+  // The SOP agent's own "nothing relevant came back" verdict: coverage `gap` with reason
+  // `retrieved_off_topic`. Its sibling reasons are different findings — `branch_not_in_sop` is a
+  // SOP that exists and fell short, `action_request_not_procedure` is an ask no procedure would
+  // ever cover — so only this one means the corpus had nothing on the subject. The pipeline
+  // rewrites a verdict whose picks are all low-confidence to exactly this state
+  // (`coverage_claimed_with_only_low_confidence_sops`), so those land here too.
+  missingSop: TurnTally;
+  // The right SOP existed and the driver's branch was not written into it.
+  branchMissing: TurnTally;
+  // Turns where the AI closed a topic in the conversation (a resolve_topic op in topic_writes).
+  // Topics auto-closed for inactivity are NOT turns and never land here (0 of the live corpus).
+  resolvedTopics: TurnTally;
 }
