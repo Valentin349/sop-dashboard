@@ -471,4 +471,8 @@ export interface TurnSummary {
   // Turns where the AI closed a topic in the conversation (a resolve_topic op in topic_writes).
   // Topics auto-closed for inactivity are NOT turns and never land here (0 of the live corpus).
   resolvedTopics: TurnTally;
+  // Times a conversation's AI went from autonomous to suggest, read off the mode each turn was
+  // stamped with — `turns` counts switches, not turns. A lower bound: a switch is only visible
+  // once the AI takes a later turn. See modesBefore in queries.ts.
+  autonomousTurnedOff: TurnTally;
 }

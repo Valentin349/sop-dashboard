@@ -180,7 +180,7 @@ export function MonitorTurnSkeleton() {
   );
 }
 
-// Monitor period summary while its scan runs. Mirrors the real panel: the meta line, the four
+// Monitor period summary while its scan runs. Mirrors the real panel: the meta line, the five
 // KPI cards, then the coverage table beside the donut card — same widths and card chrome, so
 // nothing moves when the numbers land.
 export function MonitorSummarySkeleton() {
@@ -188,8 +188,8 @@ export function MonitorSummarySkeleton() {
     <div className="w-full px-8 py-8" aria-hidden>
       <Bar className="h-3 w-72 opacity-70" />
 
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        {[0, 1, 2, 3, 4].map((i) => (
           <div key={i} className="rounded-lg border bg-card p-4">
             <Bar className="h-3 w-2/3 opacity-70" />
             <Bar className="mt-2 h-7 w-16" />

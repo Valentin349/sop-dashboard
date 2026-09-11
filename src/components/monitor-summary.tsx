@@ -3,7 +3,7 @@
 import type { TurnSummary } from "@/lib/turns/types";
 import { cn } from "@/lib/utils";
 
-// The range's numbers: the four indicators, the SOP-coverage table and the conversation split.
+// The range's numbers: the five indicators, the SOP-coverage table and the turn split.
 // Same card and table vocabulary as the Metrics tab, so the two tabs read as one dashboard. It
 // takes the main column whenever no turn is selected — the feed on the left is the queue, this
 // is the period.
@@ -145,7 +145,8 @@ export function MonitorSummary({
   // Headline number is the conversation count — a subject raised ten times in one thread is one
   // problem — with the turns, and the share of turns they are, in the sub-line. The two SOP
   // indicators are shares of the turns the SOP agent actually checked (it does not run on the
-  // proactive agent, and on nothing before 2026-08-27); the other two are shares of every turn.
+  // proactive agent, and on nothing before 2026-08-27); escalations and topic closures are shares
+  // of every turn. The autonomous-off card counts switches, not a share.
   const cards: { title: string; value: string; sub: string; note?: string }[] = [
     {
       title: "No relevant SOP found",
@@ -167,6 +168,14 @@ export function MonitorSummary({
       value: n(summary.resolvedTopics.turns),
       sub: `${share(summary.resolvedTopics.turns, summary.turns)} of turns · ${n(summary.resolvedTopics.conversations)} conversations`,
     },
+    {
+      // Headline is the number of switches — "how many times" is the question. Inferred from the
+      // mode each turn ran in, so the note says it is a floor.
+      title: "Autonomous turned off",
+      value: n(summary.autonomousTurnedOff.turns),
+      sub: `in ${n(summary.autonomousTurnedOff.conversations)} conversation${summary.autonomousTurnedOff.conversations === 1 ? "" : "s"}`,
+      note: "Seen when the AI takes a later turn — a lower bound",
+    },
   ];
 
   return (
@@ -177,7 +186,7 @@ export function MonitorSummary({
           conversations
         </p>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {cards.map((c) => (
             <KpiCard key={c.title} {...c} />
           ))}

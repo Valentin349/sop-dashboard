@@ -167,11 +167,14 @@ interface SummaryRow {
   escalate: string | null;
   action_type: string | null;
   action_reason: string | null;
+  // The conversation's mode when the turn ran — "autonomous" | "suggest". Stamped on every turn,
+  // reactive and proactive alike, which is what lets a mode switch be read back out of the log.
+  ai_mode: string | null;
 }
 
 // jsonb paths only, never a blob: a week of turns (~3.6k rows) is ~200 KB this way, a day ~30 KB.
 const SUMMARY_SELECT =
-  "id,conversation_id,coverage:sop_agent->>coverage,gap_reason:sop_agent->>gap_reason," +
+  "id,conversation_id,ai_mode,coverage:sop_agent->>coverage,gap_reason:sop_agent->>gap_reason," +
   "escalate:sop_agent->>escalate,action_type:ai_output->action->>type," +
   "action_reason:ai_output->action->>reason,conversations!inner(platform_id)";
 
@@ -254,6 +257,45 @@ async function scanGapTurns(q: TurnQuery): Promise<GapRow[]> {
   );
 }
 
+// ── Autonomous mode switched off ─────────────────────────────────────────────
+// Nothing records the toggle itself: comms.conversations holds only the current ai_mode, with no
+// timestamp and no history. But every turn stamps the mode it ran in, so a conversation whose
+// turn says "suggest" right after one that said "autonomous" was switched off in between.
+//
+// That makes the count a LOWER BOUND: a switch is only seen once the AI takes another turn, so a
+// conversation switched off and then left quiet never shows. The moment is known only to fall
+// between the two turns. `is_ai` is not used — reactive turns keep running on conversations
+// marked is_ai = false (36 in the three days to 11 Sep), so it is not the switch that stops the AI.
+
+// A switch on the first turn inside the range needs the mode of the turn before it, which can
+// predate the range. Consecutive turns in a conversation are ≤3 days apart 99% of the time, and
+// seeding from 7 days back gave the same September count as seeding from all of August.
+const MODE_LOOKBACK_DAYS = 7;
+
+function addDays(day: string, days: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// conversation id → the mode of its latest turn before the range.
+async function modesBefore(q: TurnQuery): Promise<Map<number, string>> {
+  const rows = await scanPages<{ conversation_id: number | null; ai_mode: string | null }>(
+    (lo, hi) =>
+      base(
+        { ...q, from: addDays(q.from, -MODE_LOOKBACK_DAYS), to: addDays(q.from, -1) },
+        "conversation_id,ai_mode,conversations!inner(platform_id)",
+      )
+        .order("id")
+        .range(lo, hi),
+  );
+  const modes = new Map<number, string>();
+  for (const r of rows) {
+    if (r.conversation_id != null && r.ai_mode) modes.set(r.conversation_id, r.ai_mode);
+  }
+  return modes;
+}
+
 // A turn that closed a topic. Topics auto-closed for inactivity are written by a job, not a
 // turn, so none of them reach this filter (0 live) — what it counts is the AI ending a subject
 // inside the conversation.
@@ -270,10 +312,11 @@ async function tallyResolvedTopics(q: TurnQuery): Promise<TurnTally> {
 }
 
 export async function summarizeTurns(q: TurnQuery): Promise<TurnSummary> {
-  const [rows, gapTurns, resolvedTopics] = await Promise.all([
+  const [rows, gapTurns, resolvedTopics, lastMode] = await Promise.all([
     scanPages<SummaryRow>((lo, hi) => base(q, SUMMARY_SELECT).order("id").range(lo, hi)),
     scanGapTurns(q),
     tallyResolvedTopics(q),
+    modesBefore(q),
   ]);
 
   // Gap turns the driver never asked anything on. Dropped from every coverage figure below —
@@ -290,12 +333,20 @@ export async function summarizeTurns(q: TurnQuery): Promise<TurnSummary> {
   const branchMissing = bucket();
   const missingSop = bucket();
   const acknowledgements = bucket();
+  // One hit per switch: `turns` is the number of times autonomous mode went off.
+  const autonomousOff = bucket();
   const gapReasons = new Map<string, Bucket>();
   const escalationReasons = new Map<string, Bucket>();
 
+  // Rows arrive in id order, which is turn order, so `lastMode` always holds the previous turn.
   for (const row of rows) {
     const cid = row.conversation_id;
     hit(all, cid);
+
+    if (cid != null && row.ai_mode) {
+      if (lastMode.get(cid) === "autonomous" && row.ai_mode === "suggest") hit(autonomousOff, cid);
+      lastMode.set(cid, row.ai_mode);
+    }
 
     if (row.coverage === "gap" && ackTurns.has(row.id)) {
       hit(acknowledgements, cid);
@@ -334,6 +385,7 @@ export async function summarizeTurns(q: TurnQuery): Promise<TurnSummary> {
     missingSop: tally(missingSop),
     branchMissing: tally(branchMissing),
     resolvedTopics,
+    autonomousTurnedOff: tally(autonomousOff),
   };
 }
 

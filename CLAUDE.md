@@ -284,11 +284,12 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   wrong"; `monitor-summary.tsx` answers "how did the AI do over this range", and takes the main
   column whenever no turn is selected (the chart button in the sidebar header and the "Metrics"
   crumb at the top of an open turn both put it back — both are `setTurnId(null)`). It
-  is the headline of the `sop-gap-report` skill in `driver-context-manager`, computed live: four
-  KPI cards (no relevant SOP found, branch missing, escalated to a human, topics closed by the AI —
+  is the headline of the `sop-gap-report` skill in `driver-context-manager`, computed live: five
+  KPI cards (no relevant SOP found, branch missing, escalated to a human, topics closed by the AI,
+  autonomous turned off —
   conversations big, turns and the share of turns they are underneath — the two SOP cards divide by
   the turns the SOP agent checked, the other two by every turn) over the covered/partial/
-  gap table and a donut of the conversation split, in the Metrics tab's card and table vocabulary
+  gap table and a donut of the turn split, in the Metrics tab's card and table vocabulary
   so the two tabs read as one dashboard. `summarizeTurns` also returns the gap-reason and escalation-reason
   breakdowns, which the panel does not render — they come free with the same scan.
 - **The donut is over TURNS, not conversations.** The three verdicts are exclusive per turn, so
@@ -309,7 +310,7 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   how the gap report weighs evidence, and PostgREST cannot count distinct — so `summarizeTurns`
   scans the range once on a light projection (jsonb paths only, ~30 KB a day, ~200 KB a week;
   0.6 s and 1.6 s) instead of firing count queries. A conversation can land in several rows, so
-  the shares don't add to 100% and the panel says so.
+  the conversation column doesn't add up — which is why the donut is over turns.
 - **"No relevant SOP found" is the agent's own verdict**, not a derived marker: coverage `gap`
   with `gap_reason = retrieved_off_topic`. Its siblings are different findings and are not folded
   in — `branch_not_in_sop` is a SOP that exists and fell short (its own card),
@@ -317,20 +318,27 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   whose picks are all low-confidence into exactly this state
   (`coverage_claimed_with_only_low_confidence_sops`), so those land here too. It comes free with
   the scan — no extra query.
-- **It reads high, and that is the corpus, not a bug.** Roughly 45% of these turns are turns where
-  the driver asked nothing — "Block", "It was calm", a thank-you — measured over 1–9 Sep 2026:
-  101 of 223. The SOP agent still returns `gap` because there was nothing to retrieve *for*. The
-  gap report separates those with a no-ask test over `context_manager_output`; the panel does not,
-  by decision — the card counts the agent's verdicts as issued.
 - **Topics closed by the AI** = turns carrying a `resolve_topic` op in `ai_output.topic_writes`
   (one `cs` filter). Topics auto-closed for inactivity or staleness are written by a job, not a
   turn, so none of them are counted (0 live) — which is what makes this a proxy for the AI
   actually finishing something rather than a cleanup total. It is per turn, so a turn that closed
   two subjects counts once.
+- **Autonomous turned off is inferred, because nothing records the toggle.**
+  `comms.conversations` holds only the current `ai_mode` / `is_ai` — no timestamp, no history, no
+  message event, and none of the local repos write either column (it is flipped from the
+  Chatwoot/n8n side). But every turn, reactive and proactive, stamps the mode it ran in
+  (`ai_turns.ai_mode`, 0 mismatches against the conversation on recent reactive turns), so a
+  `suggest` turn straight after an `autonomous` one in the same conversation is a switch.
+  Consequences: it is a **lower bound** (a switch followed by no further turn never shows), the
+  moment is only known to fall between two turns, and there is no actor. The first in-range turn
+  needs its predecessor's mode, so `modesBefore` seeds from a 7-day lookback — consecutive turns
+  are ≤3 days apart 99% of the time, and 7 days gave the same September count as all of August.
+  `is_ai` is deliberately ignored: reactive turns keep running on conversations marked
+  `is_ai = false` (36 in the three days to 11 Sep), so it is not what stops the AI. Since 1 Aug on
+  Anda: 27 switches off in 23 conversations, 90 back on. An exact count (with who) needs the n8n
+  workflow that writes `ai_mode` to log each change into a new events table; until then this is it.
 - Escalations are reported twice on purpose: `action.type = escalate_to_human` (a person was
   pulled in) and `sop_agent.escalate` (the SOP agent asked for one). The counts differ.
-- Gap counts include turns where the driver asked nothing (a thank-you, an "ok"). Separating
-  those needs `context_manager_output`, which the scan does not carry; the panel says so.
 - The summary ignores the flag chips — they narrow the feed, not the period — so it is its own
   request with its own loading flag, refetched only when platform, dates or refresh move.
 - Routes: `GET /api/turns` (feed + counts; counts on the first page only), `GET /api/turns/[id]`,
