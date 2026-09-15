@@ -5,12 +5,12 @@ import { ChartColumn, RefreshCw } from "lucide-react";
 
 import type { PlatformRow } from "@/lib/sops/types";
 import { monitorHref } from "@/lib/turns/nav";
-import type {
-  FlagCounts,
-  TurnDetail,
-  TurnFeedRow,
-  TurnFlag,
-  TurnSummary,
+import {
+  flagCounts,
+  type TurnDetail,
+  type TurnFeedRow,
+  type TurnFlag,
+  type TurnSummary,
 } from "@/lib/turns/types";
 import { cn } from "@/lib/utils";
 import { TopBarCenter } from "./top-bar-center";
@@ -55,7 +55,6 @@ export function MonitorDashboard({
   const [turnId, setTurnId] = useState(initialTurnId);
 
   const [rows, setRows] = useState<TurnFeedRow[]>([]);
-  const [counts, setCounts] = useState<FlagCounts | null>(null);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   // `loading` is set by whatever invalidates the feed (a filter change, refresh) and cleared by
   // the fetch that answers it. Setting it inside the effect body instead would cascade a second
@@ -132,8 +131,8 @@ export function MonitorDashboard({
     [from, to, flags],
   );
 
-  // Refetch the feed whenever the query that defines it changes. Counts come back with the first
-  // page only, so they refresh here and not on "Load more".
+  // Refetch the feed whenever the query that defines it changes. The chip counts are not part
+  // of this response — they are derived from the period summary below.
   useEffect(() => {
     // Nothing to fetch without a platform. Bail rather than clearing state here — the render
     // derives the empty case below, and a setState in an effect body cascades a second render.
@@ -152,7 +151,6 @@ export function MonitorDashboard({
         setError(null);
         setRows(data.rows ?? []);
         setNextCursor(data.nextCursor ?? null);
-        setCounts(data.counts ?? null);
       })
       .catch((e: Error) => {
         if (feedToken.current === token) setError(e.message);
@@ -286,6 +284,10 @@ export function MonitorDashboard({
   }, []);
 
   const platformName = platforms.find((p) => p.id === platformId)?.name ?? "Platform";
+
+  // The chip counts, from the summary's per-combination buckets. Sixteen additions per render,
+  // so no memo; and because the union is summed here, a chip click never refetches a count.
+  const counts = summary ? flagCounts(summary.flagCombos, flags) : null;
 
   // Derived views of the fetch state: without a platform there is no feed, and a turn that is no
   // longer selected keeps no stale detail on screen even though `detail` still holds it.

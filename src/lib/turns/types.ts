@@ -177,13 +177,45 @@ export type FlagCounts = Record<TurnFlag, number> & { total: number };
 
 // ── Derived helpers (shared by the feed row and the detail header) ─────────────
 
-export function flagsForTurn(row: TurnFeedRow): TurnFlag[] {
+// The four tests, once: the badges on a feed row and the chip counts in the period summary both
+// come through here, so a chip's number and the rows it selects can't disagree. Each test is the
+// row-side twin of its FLAG_FILTER fragment in queries.ts.
+export function turnFlags(t: {
+  action_type: string | null | undefined;
+  is_valid: boolean | null;
+  retry_count: number | null;
+  coverage: string | null;
+}): TurnFlag[] {
   const flags: TurnFlag[] = [];
-  if (row.action?.type === "escalate_to_human") flags.push("escalated");
-  if (row.is_valid === false) flags.push("invalid");
-  if ((row.retry_count ?? 0) > 0) flags.push("retried");
-  if (row.coverage === "gap" || row.coverage === "partial") flags.push("sop_gap");
+  if (t.action_type === "escalate_to_human") flags.push("escalated");
+  if (t.is_valid === false) flags.push("invalid");
+  if ((t.retry_count ?? 0) > 0) flags.push("retried");
+  if (t.coverage === "gap" || t.coverage === "partial") flags.push("sop_gap");
   return flags;
+}
+
+export function flagsForTurn(row: TurnFeedRow): TurnFlag[] {
+  return turnFlags({ ...row, action_type: row.action?.type });
+}
+
+// A set of flags as one bit per flag, in TURN_FLAGS order. The summary tallies turns by this —
+// 16 buckets, one per combination — which is what lets the client count the union of any chip
+// selection without a query: a turn carrying two flags is one turn, not two.
+export function flagMask(flags: readonly TurnFlag[]): number {
+  return flags.reduce((m, f) => m | (1 << TURN_FLAGS.indexOf(f)), 0);
+}
+
+// The chip counts for a selection, from the summary's 16 buckets: each flag's own total, and
+// the number of turns carrying any selected flag (none selected = any flag at all).
+export function flagCounts(combos: readonly number[], selected: readonly TurnFlag[]): FlagCounts {
+  const sum = (mask: number) => combos.reduce((n, count, m) => (m & mask ? n + count : n), 0);
+  return {
+    escalated: sum(flagMask(["escalated"])),
+    invalid: sum(flagMask(["invalid"])),
+    retried: sum(flagMask(["retried"])),
+    sop_gap: sum(flagMask(["sop_gap"])),
+    total: sum(flagMask(selected.length > 0 ? selected : TURN_FLAGS)),
+  };
 }
 
 // Reason codes are snake_case machine strings (branch_not_in_sop, unclear_after_clarification).
@@ -475,4 +507,9 @@ export interface TurnSummary {
   // stamped with — `turns` counts switches, not turns. A lower bound: a switch is only visible
   // once the AI takes a later turn. See modesBefore in queries.ts.
   autonomousTurnedOff: TurnTally;
+  // Turns by the combination of feed flags they carry: 16 buckets indexed by flagMask(). The
+  // flag chips take their counts from this (flagCounts) rather than from count queries — the
+  // scan already reads every row in the range. Over every turn, acknowledgements included: the
+  // feed doesn't drop those, so nor does its count.
+  flagCombos: number[];
 }

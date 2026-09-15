@@ -217,8 +217,11 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   `/api/turns`. Paging is **keyset on `id`**, not offset — the feed is a descending scan and
   offset paging re-walks every skipped row. The feed projection selects jsonb *paths*
   (`action:ai_output->action`), never the whole `ai_output` blob: a page of 50 is ~25 KB rather
-  than hundreds. The default 1-day window costs ~430 ms (feed ~410 ms ∥ four counts ~430 ms);
-  7 days costs ~600 ms and three months ~5.5 s. `validation_result` IS carried in full
+  than hundreds. A feed page costs ~80 ms warm at any range. **The flag chips' counts are not
+  count queries**: the period summary's scan already reads every field the four flags test, so it
+  tallies turns into 16 buckets by flag combination (`flagCombos`) and the client sums the
+  selection (`flagCounts` in types.ts) — a chip click refetches the feed page and nothing else.
+  `validation_result` IS carried in full
   (+6.6 KB/page) because a row badge names the real error, and only 13% of invalid turns put one
   in `batch_errors` — the other 87% are per-op, under `results[].errors`.
 - `ai_turns` has **no platform column** — it comes from `conversations!inner(platform_id)`, which
@@ -341,8 +344,8 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   pulled in) and `sop_agent.escalate` (the SOP agent asked for one). The counts differ.
 - The summary ignores the flag chips — they narrow the feed, not the period — so it is its own
   request with its own loading flag, refetched only when platform, dates or refresh move.
-- Routes: `GET /api/turns` (feed + counts; counts on the first page only), `GET /api/turns/[id]`,
-  `GET /api/turns/summary` (the period summary; viewer).
+- Routes: `GET /api/turns` (one feed page), `GET /api/turns/[id]`, `GET /api/turns/summary` (the
+  period summary, which also carries the chip counts; viewer).
 
 ## Conventions
 

@@ -2,7 +2,6 @@ import "server-only";
 
 import { getServerClient } from "@/lib/supabase/server";
 import type {
-  FlagCounts,
   TurnBreakdown,
   TurnSummary,
   TurnTally,
@@ -12,7 +11,7 @@ import type {
   TurnFeedRow,
   TurnFlag,
 } from "./types";
-import { isNoAskTurn, TURN_FLAGS } from "./types";
+import { flagMask, isNoAskTurn, turnFlags, TURN_FLAGS } from "./types";
 
 // Reads from comms.ai_turns — the AI pipeline's own turn log, a different schema than SOPs
 // (same move issues/queries.ts makes for `dashboard`). No caching: the tab monitors production,
@@ -115,37 +114,6 @@ export async function listFlaggedTurns(
   return { rows, nextCursor };
 }
 
-// A count-only request over the same bounds: `head: true` means PostgREST returns the count
-// header and no rows at all.
-function countBase(q: TurnQuery) {
-  return getServerClient()
-    .schema("comms")
-    .from("ai_turns")
-    .select("id,conversations!inner(platform_id)", { count: "exact", head: true })
-    .eq("conversations.platform_id", q.platformId)
-    .gte("created_at", q.from)
-    .lt("created_at", endExclusive(q.to));
-}
-
-// Per-flag totals for the range, plus the total of their union (which is smaller than the sum —
-// a turn can carry several flags). Five count-only requests, run together.
-export async function countFlags(q: TurnQuery): Promise<FlagCounts> {
-  const counted = async (filter: string) => {
-    const { count, error } = await countBase(q).or(filter);
-    if (error) throw error;
-    return count ?? 0;
-  };
-
-  const [escalated, invalid, retried, sop_gap, total] = await Promise.all([
-    counted(FLAG_FILTER.escalated),
-    counted(FLAG_FILTER.invalid),
-    counted(FLAG_FILTER.retried),
-    counted(FLAG_FILTER.sop_gap),
-    counted(orFilter(q.flags)),
-  ]);
-  return { escalated, invalid, retried, sop_gap, total };
-}
-
 // ── Period summary ────────────────────────────────────────────────────────────
 // What the SOP gap report's headline table is built from, computed live for the selected range:
 // how the SOP agent judged its own coverage, and the handful of proxies for "how is the AI
@@ -155,12 +123,18 @@ export async function countFlags(q: TurnQuery): Promise<FlagCounts> {
 // Counted in turns AND in conversations. Ten turns in one conversation are one signal, which is
 // the rule the gap report weighs evidence by, and PostgREST cannot count distinct — so the
 // conversation figures come from a scan of one light projection rather than a count query.
+//
+// The feed's flag chips are counted here too (`flagCombos`): the scan already carries every
+// field the four flags test, so five count-only requests per page — and five more per chip
+// click — became two scalar columns in the projection.
 
 const SCAN_PAGE = 1000;
 
 interface SummaryRow {
   id: number;
   conversation_id: number | null;
+  is_valid: boolean | null;
+  retry_count: number | null;
   coverage: string | null;
   gap_reason: string | null;
   // sop_agent->>escalate is text out of PostgREST: "true" / "false".
@@ -174,7 +148,8 @@ interface SummaryRow {
 
 // jsonb paths only, never a blob: a week of turns (~3.6k rows) is ~200 KB this way, a day ~30 KB.
 const SUMMARY_SELECT =
-  "id,conversation_id,ai_mode,coverage:sop_agent->>coverage,gap_reason:sop_agent->>gap_reason," +
+  "id,conversation_id,ai_mode,is_valid,retry_count," +
+  "coverage:sop_agent->>coverage,gap_reason:sop_agent->>gap_reason," +
   "escalate:sop_agent->>escalate,action_type:ai_output->action->>type," +
   "action_reason:ai_output->action->>reason,conversations!inner(platform_id)";
 
@@ -337,11 +312,14 @@ export async function summarizeTurns(q: TurnQuery): Promise<TurnSummary> {
   const autonomousOff = bucket();
   const gapReasons = new Map<string, Bucket>();
   const escalationReasons = new Map<string, Bucket>();
+  // One bucket per combination of feed flags; index 0 is the unflagged turns.
+  const flagCombos = new Array<number>(1 << TURN_FLAGS.length).fill(0);
 
   // Rows arrive in id order, which is turn order, so `lastMode` always holds the previous turn.
   for (const row of rows) {
     const cid = row.conversation_id;
     hit(all, cid);
+    flagCombos[flagMask(turnFlags(row))] += 1;
 
     if (cid != null && row.ai_mode) {
       if (lastMode.get(cid) === "autonomous" && row.ai_mode === "suggest") hit(autonomousOff, cid);
@@ -386,6 +364,7 @@ export async function summarizeTurns(q: TurnQuery): Promise<TurnSummary> {
     branchMissing: tally(branchMissing),
     resolvedTopics,
     autonomousTurnedOff: tally(autonomousOff),
+    flagCombos,
   };
 }
 

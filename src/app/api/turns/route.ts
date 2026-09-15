@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { requireApi } from "@/lib/auth/session";
-import { countFlags, listFlaggedTurns } from "@/lib/turns/queries";
+import { listFlaggedTurns } from "@/lib/turns/queries";
 import { parseDate, parseFlags } from "@/lib/turns/nav";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/turns?platform=1&from=2026-08-24&to=2026-08-31&flags=escalated,invalid&cursor=32000
 //
-// One page of flagged turns, newest first, plus the per-flag counts for the range. Read-only and
-// viewer-gated: the Monitor tab never writes to the pipeline's log.
+// One page of flagged turns, newest first. Read-only and viewer-gated: the Monitor tab never
+// writes to the pipeline's log.
 //
-// Counts are returned only on the FIRST page — they cost four extra count-only queries (~1.6s
-// together) and can't change as you scroll deeper into the same range.
+// No counts: the flag chips take theirs from /api/turns/summary, whose scan of the range
+// already reads every field the flags test.
 export async function GET(req: Request) {
   const g = await requireApi();
   if (g.error) return g.error;
@@ -39,11 +39,7 @@ export async function GET(req: Request) {
   const query = { platformId, from, to, flags: parseFlags(sp.get("flags")) };
 
   try {
-    const [page, counts] = await Promise.all([
-      listFlaggedTurns(query, cursor),
-      cursor == null ? countFlags(query) : Promise.resolve(null),
-    ]);
-    return NextResponse.json({ ...page, counts });
+    return NextResponse.json(await listFlaggedTurns(query, cursor));
   } catch (e) {
     return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
   }
