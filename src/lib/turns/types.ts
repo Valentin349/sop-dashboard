@@ -114,9 +114,23 @@ export interface SopAgent {
   bundle_sop_ids: number[] | null;
   dropped_ids: number[] | null;
   overrides: unknown[] | null;
-  queries: string[] | null;
   search_count: number | null;
   harness_error: string | null;
+}
+
+// One entry of sop_search.searches, recorded from the actual tool calls. Only the fields the
+// dashboard reads.
+export interface SopSearchEntry {
+  source: string | null;
+  query: string | null;
+}
+
+// The SOP agent's queries, in the order it ran them. Filtered on source because sop_search also
+// holds the reactive agent's own lookups, which are not SOP agent searches.
+export function sopAgentQueries(searches: SopSearchEntry[] | null | undefined): string[] {
+  return (searches ?? []).flatMap((s) =>
+    s.source === "sop_agent" && s.query != null ? [s.query] : [],
+  );
 }
 
 // ── Rows ──────────────────────────────────────────────────────────────────────
@@ -144,6 +158,7 @@ export interface TurnFeedRow {
 export interface TurnDetailRow extends TurnFeedRow {
   ai_output: TurnOutput | null;
   sop_agent: SopAgent | null;
+  sop_searches: SopSearchEntry[] | null;
   ai_model: string | null;
   prompt_commit_version: string | null;
   version: string | null;
@@ -327,8 +342,8 @@ export function parseSopQuery(raw: string): SopQuery {
 // ran at least one pass), so "it searched and found nothing" includes turns where no SOP was
 // ever the answer. Same test the SOP gap report uses to keep those out of its evidence: the
 // driver's last message is four words or fewer, or the agent's own reading of the situation
-// says acknowledgement. Read off `sop_agent.queries` — the only place the driver's words and the
-// agent's reading are both available without pulling the whole context blob.
+// says acknowledgement. Read off the SOP agent's entries in `sop_search` — the only place the
+// driver's words and the agent's reading are both available without pulling the whole context blob.
 const NO_ASK =
   /thank|acknowledg|positive (reply|response|update|check|mood|answer)|no (new )?(question|request|problem|ask)|nothing to report|closing|greet|farewell|no problem reported|confirms? .*(resolved|fixed|back online|working)/i;
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { getServerClient } from "@/lib/supabase/server";
 import type {
+  SopSearchEntry,
   TurnBreakdown,
   TurnSummary,
   TurnTally,
@@ -11,7 +12,7 @@ import type {
   TurnFeedRow,
   TurnFlag,
 } from "./types";
-import { flagMask, isNoAskTurn, turnFlags, TURN_FLAGS } from "./types";
+import { flagMask, isNoAskTurn, sopAgentQueries, turnFlags, TURN_FLAGS } from "./types";
 
 // Reads from comms.ai_turns — the AI pipeline's own turn log, a different schema than SOPs
 // (same move issues/queries.ts makes for `dashboard`). No caching: the tab monitors production,
@@ -42,7 +43,8 @@ const FEED_SELECT =
 
 const DETAIL_SELECT =
   "id,created_at,ai_name,ai_mode,is_valid,retry_count,conversation_id,accept,version," +
-  "ai_output,validation_result,sop_agent,ai_model,prompt_commit_version," +
+  "ai_output,validation_result,sop_agent,sop_searches:sop_search->searches," +
+  "ai_model,prompt_commit_version," +
   "n8n_workflow_id,n8n_workflow_execution_id," +
   "conversations!inner(platform_id,chatwoot_conversation_id,driver_id)";
 
@@ -220,12 +222,12 @@ function breakdown(map: Map<string, Bucket>): TurnBreakdown[] {
 // the turn's own queries. Only gap turns carry a reason, so this is a few hundred rows a week.
 interface GapRow {
   id: number;
-  queries: string[] | null;
+  searches: SopSearchEntry[] | null;
 }
 
 async function scanGapTurns(q: TurnQuery): Promise<GapRow[]> {
   return scanPages<GapRow>((lo, hi) =>
-    base(q, "id,queries:sop_agent->queries,conversations!inner(platform_id)")
+    base(q, "id,searches:sop_search->searches,conversations!inner(platform_id)")
       .eq("sop_agent->>coverage", "gap")
       .order("id")
       .range(lo, hi),
@@ -296,7 +298,7 @@ export async function summarizeTurns(q: TurnQuery): Promise<TurnSummary> {
 
   // Gap turns the driver never asked anything on. Dropped from every coverage figure below —
   // they are a property of the conversation, not of the corpus.
-  const ackTurns = new Set(gapTurns.filter((t) => isNoAskTurn(t.queries)).map((t) => t.id));
+  const ackTurns = new Set(gapTurns.filter((t) => isNoAskTurn(sopAgentQueries(t.searches))).map((t) => t.id));
 
   const all = bucket();
   const scored = bucket();

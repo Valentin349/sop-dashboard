@@ -14,6 +14,7 @@ import {
   humanizeReason,
   parseSopQuery,
   parseSupportRef,
+  sopAgentQueries,
   summaryForTurn,
   type TranscriptMessage,
   type TurnDetail,
@@ -246,6 +247,7 @@ export const MonitorTurn = memo(function MonitorTurn({
   const action = turn.action ?? turn.ai_output?.action ?? null;
   const escalation = action?.type === "escalate_to_human" ? action : null;
   const sop = turn.sop_agent;
+  const sopQueries = sopAgentQueries(turn.sop_searches);
   const validation = turn.validation_result;
   const replies = replyTexts(turn.ai_output?.reply);
   const support = turn.ai_output?.support ?? [];
@@ -262,7 +264,7 @@ export const MonitorTurn = memo(function MonitorTurn({
   // says how many there are to read rather than repeating them.
   const picks = sop?.sops ?? [];
   const bundled = sop?.bundle_sop_ids ?? [];
-  const searchCount = sop?.search_count ?? sop?.queries?.length ?? 0;
+  const searchCount = sop?.search_count ?? sopQueries.length;
   const retrievalNote =
     picks.length === 0
       ? `${searchCount} search${searchCount === 1 ? "" : "es"} returned no SOP at all.`
@@ -451,12 +453,12 @@ export const MonitorTurn = memo(function MonitorTurn({
                     )}
                     {/* On a gap with nothing retrieved this is the whole finding: the topic no
                         SOP covers, in the agent's own words. */}
-                    {gapTopic(sop.queries) && (
+                    {gapTopic(sopQueries) && (
                       <p className="mt-2 text-[12px] leading-relaxed text-foreground/85">
                         <span className="text-violet-900/70 dark:text-violet-300/70">
                           Searched for:{" "}
                         </span>
-                        {gapTopic(sop.queries)}
+                        {gapTopic(sopQueries)}
                       </p>
                     )}
                     <p className="mt-2 text-[12px] text-violet-900/80 dark:text-violet-300/80">
@@ -483,9 +485,9 @@ export const MonitorTurn = memo(function MonitorTurn({
                     the context line is the agent's own reading of what the driver needs and is
                     what a missing SOP would have to cover. An unstructured query falls back to
                     the whole string as the context. */}
-                {(sop.queries ?? []).length > 0 && (
+                {sopQueries.length > 0 && (
                   <div className="mb-3 space-y-1.5">
-                    {(sop.queries ?? []).map((q, i) => {
+                    {sopQueries.map((q, i) => {
                       const parsed = parseSopQuery(q);
                       return (
                         <div key={i} className="rounded-md bg-muted/60 px-2.5 py-2">

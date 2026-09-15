@@ -246,11 +246,11 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   verdict with one sentence saying what it means — on the badge's tooltip and in the "Why flagged"
   block. A gap hands the model nothing (0 of 393 gap turns have a non-empty `bundle_sop_ids`), so
   the block also says what retrieval produced instead: no SOP at all, or N retrieved and rejected,
-  with the per-SOP notes left to the SOP-retrieval rail rather than repeated. `sop_agent.queries`
-  are `latest:/context:/keywords:` blobs (1,087 of 1,214 on flagged rows; the rest a bare
-  sentence) — `parseSopQuery` splits them, and the `context` line is the agent's own reading of
-  what the driver needed, i.e. the topic a missing SOP would have to cover. Every flagged row
-  yields one (`gapTopic`, 804/804).
+  with the per-SOP notes left to the SOP-retrieval rail rather than repeated. The SOP agent's
+  queries (its `sop_search` entries, `source: "sop_agent"`) are `latest:/context:/keywords:`
+  blobs (1,087 of 1,214 on flagged rows; the rest a bare sentence) — `parseSopQuery` splits them,
+  and the `context` line is the agent's own reading of what the driver needed, i.e. the topic a
+  missing SOP would have to cover. Every flagged row yields one (`gapTopic`, 804/804).
 - **The headline renders only when it adds something** (`headlineAddsDetail`, 22% of rows): an
   escalation has the model's prose summary and a validation failure has the clause the badge
   truncated, but a gap or a retry would just restate its badge. Suppression is on exact equality,
@@ -305,10 +305,11 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
   verdict on "thank you" / "ok" / "Block" is a property of the conversation, not a hole in the
   corpus. `isNoAskTurn` (types.ts) is the SOP gap report's test — the driver's last message is ≤4
   words, or the agent's own `context:` line reads as an acknowledgement — run over
-  `sop_agent.queries`, which carries both without pulling `context_manager_output`. Only gap turns
-  are tested (`scanGapTurns`, a few hundred rows a week); a short message on a covered turn is a
-  real ask. `summary.acknowledgements` reports how many were set aside, and the panel says so.
-  Live effect, 1–10 Sep: 119 turns out, gap 293 → 174, "no relevant SOP" 234 → 126.
+  the SOP agent's entries in `sop_search` (`source: "sop_agent"`), which carry both without
+  pulling `context_manager_output`. Only gap turns are tested (`scanGapTurns`, a few hundred rows
+  a week); a short message on a covered turn is a real ask. `summary.acknowledgements` reports how
+  many were set aside, and the panel says so. Live effect, 1–10 Sep: 119 turns out, gap 293 → 174,
+  "no relevant SOP" 234 → 126.
 - **Counted in turns AND conversations.** Ten turns in one conversation are one signal, which is
   how the gap report weighs evidence, and PostgREST cannot count distinct — so `summarizeTurns`
   scans the range once on a light projection (jsonb paths only, ~30 KB a day, ~200 KB a week;
