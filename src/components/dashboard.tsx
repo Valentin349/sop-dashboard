@@ -470,8 +470,6 @@ export function Dashboard({
   ]);
   const platform = platforms.find((p) => p.id === platformId);
   const platformName = platform?.name ?? "Platform";
-  // Platform code gates the structured (house-standard) view/editor — see lib/sops/structure.ts.
-  const platformCode = platform?.code ?? null;
   const categoryName =
     categories?.find((c) => c.id === categoryId)?.name ?? "Category";
 
@@ -629,7 +627,6 @@ export function Dashboard({
             mode="create"
             sop={null}
             platformId={platformId}
-            platformCode={platformCode}
             categoryId={categoryId}
             categories={categories ?? []}
             products={products}
@@ -645,7 +642,6 @@ export function Dashboard({
             mode="edit"
             sop={selectedSop}
             platformId={platformId}
-            platformCode={platformCode}
             categoryId={categoryId}
             categories={categories ?? []}
             products={products}
@@ -671,7 +667,6 @@ export function Dashboard({
           <SopView
             sop={selectedSop}
             platformName={platformName}
-            platformCode={platformCode}
             categoryName={categoryName}
             products={products}
             variables={variables}

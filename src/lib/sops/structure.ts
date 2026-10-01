@@ -7,8 +7,9 @@
 // puts it back together with the standard's indentation. parse → serialize is a round trip for
 // every SOP that follows the standard; the only drift is whitespace normalisation.
 //
-// Only the Anda corpus has been rewritten to the standard, so the structured UI is gated on the
-// platform (see `platformSupportsStructure`). Other platforms keep the plain-text view/editor.
+// The standard covers every platform. A body written before it has no block headings, so it
+// parses into a preamble alone: the view falls back to plain text and the editor shows it as
+// "Before the first section" until someone moves it into sections.
 
 // Fixed set, fixed order (standard §2.2). "Location" / "Links" are the reference shape (§2.4).
 export const BLOCK_ORDER = [
@@ -341,11 +342,4 @@ export function withBlock(doc: SopDoc, block: SopBlock): SopDoc {
 
 export function relabelBranches(branches: Branch[]): Branch[] {
   return branches.map((b, i) => ({ ...b, label: String.fromCharCode(65 + i) }));
-}
-
-// The structured UI is only correct for corpora rewritten to the standard.
-const STRUCTURED_PLATFORM_CODES = new Set(["anda"]);
-
-export function platformSupportsStructure(code: string | null | undefined): boolean {
-  return code != null && STRUCTURED_PLATFORM_CODES.has(code.toLowerCase());
 }

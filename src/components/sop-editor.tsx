@@ -19,7 +19,6 @@ import type {
 } from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
 import { MAX_UPLOAD_BYTES, formatBytes, mediaTypeFor } from "@/lib/sops/media";
-import { platformSupportsStructure } from "@/lib/sops/structure";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { TagToggleGroup } from "./tag-controls";
 import { SopStructuredEditor } from "./sop-structured-editor";
@@ -50,7 +49,6 @@ export function SopEditor({
   mode,
   sop,
   platformId,
-  platformCode,
   categoryId,
   categories,
   products,
@@ -64,7 +62,6 @@ export function SopEditor({
   mode: Mode;
   sop: KnowledgeBaseRow | null;
   platformId: number;
-  platformCode: string | null;
   categoryId: number | null;
   categories: CategoryWithCount[];
   products: ProductRow[];
@@ -76,9 +73,6 @@ export function SopEditor({
   // Reports whether there are unsaved changes, so navigating away can ask first.
   onDirtyChange?: (dirty: boolean) => void;
 }) {
-  // The section-by-section editor only fits corpora written to the house standard — see
-  // src/lib/sops/structure.ts. Everywhere else the body stays a plain textarea.
-  const structured = platformSupportsStructure(platformCode);
   const [title, setTitle] = useState(sop?.title ?? "");
   const [content, setContent] = useState(sop?.content ?? "");
   const [catId, setCatId] = useState<number | null>(
@@ -496,24 +490,12 @@ export function SopEditor({
             </Field>
           </div>
 
-          {structured ? (
-            <SopStructuredEditor
-              value={content}
-              onChange={setContent}
-              variables={variables}
-              onOpenVariables={onOpenVariables}
-            />
-          ) : (
-            <Field label="Content">
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={16}
-                placeholder="SOP content"
-                className="w-full resize-y rounded-md border bg-background px-3 py-2 font-mono text-[13px] leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-              />
-            </Field>
-          )}
+          <SopStructuredEditor
+            value={content}
+            onChange={setContent}
+            variables={variables}
+            onOpenVariables={onOpenVariables}
+          />
 
           {/* Tagging is a separate job from writing the body — set it apart so the two don't
               read as one long form. */}

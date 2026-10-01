@@ -61,12 +61,13 @@ extra debug info in dev. Dev only — `next build`/`next start` keep the default
 The auth gate lives in `src/proxy.ts` (Next 16's renamed `middleware` file convention: export
 `proxy`, Node.js runtime, a `runtime` config option throws).
 
-## Structured SOPs (Anda only)
+## Structured SOPs
 
-Platform 1 (`anda`) has been rewritten to the house standard in
+Every platform is read and edited against the house standard in
 `src/content/sop-writing-standard.md` — fixed blocks (`Driver says`, `Environment`, `Ask first`,
 `Resolution`, `Cause`; `Location`/`Links` for reference entries), branches labelled `A.`/`B.`,
-example replies inline. The other platforms still hold the old free-text SOPs.
+example replies inline. Only Anda (platform 1) has been rewritten to it so far; Deliveroo and
+Bolt still hold old free-text bodies, none of which contain a block heading.
 
 - `src/lib/sops/structure.ts` parses the stored body into those blocks and serializes it back.
   Parse → serialize round-trips the live Anda corpus (107/134 byte-identical, 24 whitespace-only,
@@ -74,10 +75,10 @@ example replies inline. The other platforms still hold the old free-text SOPs.
   a view over it, never a new column.
 - `src/lib/sops/body.ts` is the line-level pass inside a block (steps, sub-bullets, IF/THEN,
   example replies). Split from the component so it can be run without a DOM.
-- The view (`sop-structured-view.tsx`) and the section editor (`sop-structured-editor.tsx`) are
-  gated on the platform code via `platformSupportsStructure`. Add a platform to that set only once
-  its corpus is rewritten; everything else keeps the plain textarea and pre-wrap view. A SOP that
-  doesn't parse into blocks falls back to plain rendering too.
+- The view (`sop-structured-view.tsx`) and the section editor (`sop-structured-editor.tsx`) apply
+  to every platform. A body with no block heading parses into a preamble alone: the view falls
+  back to the plain pre-wrap rendering, and the editor shows the whole body as "Before the first
+  section" until someone moves it into sections.
 - The editor writes nothing on mount: an untouched SOP keeps its stored text byte for byte. Its
   "Edit as plain text" toggle is the escape hatch when the structure gets in the way.
 - Two parser rules exist to stop text disappearing on save: a heading that appears twice has both

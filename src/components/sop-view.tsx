@@ -10,7 +10,7 @@ import type {
   SopVariableRow,
 } from "@/lib/sops/types";
 import { tokensIn } from "@/lib/sops/variables";
-import { parseSop, platformSupportsStructure } from "@/lib/sops/structure";
+import { parseSop } from "@/lib/sops/structure";
 import { TagChips, type TagTone } from "./tag-controls";
 import { SopStructuredView } from "./sop-structured-view";
 import { Text, VariablesProvider } from "./sop-text";
@@ -59,7 +59,6 @@ function TagRow({
 export const SopView = memo(function SopView({
   sop,
   platformName,
-  platformCode,
   categoryName,
   products,
   variables,
@@ -69,7 +68,6 @@ export const SopView = memo(function SopView({
 }: {
   sop: KnowledgeBaseRow;
   platformName: string;
-  platformCode: string | null;
   categoryName: string;
   products: ProductRow[];
   variables: SopVariableRow[];
@@ -78,12 +76,9 @@ export const SopView = memo(function SopView({
   onEdit?: () => void;
 }) {
   const created = formatDate(sop.created_at);
-  // Only the Anda corpus is written to the house standard. Anything that doesn't parse into
-  // blocks (a half-migrated row, a stub) falls back to the plain-text rendering.
-  const doc = useMemo(
-    () => (platformSupportsStructure(platformCode) ? parseSop(sop.content) : null),
-    [platformCode, sop.content],
-  );
+  // A body that doesn't parse into blocks (written before the standard, a stub) falls back to
+  // the plain-text rendering.
+  const doc = useMemo(() => parseSop(sop.content), [sop.content]);
   // The body above shows resolved values. This says which of those numbers are managed centrally,
   // and where to change them.
   const variableValues = useMemo(
@@ -187,7 +182,7 @@ export const SopView = memo(function SopView({
           </header>
 
           <VariablesProvider values={variableValues}>
-            {doc && doc.blocks.length > 0 ? (
+            {doc.blocks.length > 0 ? (
               <SopStructuredView doc={doc} />
             ) : (
               <div className="font-serif text-[1.05rem] leading-[1.75] whitespace-pre-wrap break-words text-foreground/90">
