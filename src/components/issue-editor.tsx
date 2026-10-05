@@ -472,7 +472,7 @@ function Select({
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className={`${CONTROL} flex cursor-pointer items-center justify-between gap-2 text-left transition-colors hover:bg-muted-foreground/10`}>
+      <DropdownMenuTrigger className={`${CONTROL} flex items-center justify-between gap-2 text-left transition-colors hover:bg-muted-foreground/10`}>
         <span className={value ? "truncate" : "truncate italic text-muted-foreground"}>
           {value || "None"}
         </span>

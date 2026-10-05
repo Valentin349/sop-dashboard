@@ -128,4 +128,11 @@
   html {
     @apply font-sans;
   }
+  /* Tailwind v4 leaves buttons on the default arrow; anything clickable gets the hand. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="menuitem"]:not([data-disabled]),
+  summary {
+    cursor: pointer;
+  }
 }
