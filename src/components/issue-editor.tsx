@@ -3,12 +3,7 @@
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 
-import {
-  ISSUE_TYPES,
-  MAIN_CATEGORIES,
-  VEHICLE_TYPES,
-  type IssueRow,
-} from "@/lib/issues/types";
+import type { IssueRow } from "@/lib/issues/types";
 import type { ProductRow } from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
 import { TagToggleGroup } from "./tag-controls";
@@ -35,6 +30,9 @@ export function IssueEditor({
   mode,
   issue,
   platformId,
+  mainCategories,
+  issueTypes,
+  vehicleTypes,
   products,
   onCancel,
   onSaved,
@@ -43,12 +41,15 @@ export function IssueEditor({
   mode: Mode;
   issue: IssueRow | null;
   platformId: number;
+  mainCategories: string[];
+  issueTypes: string[];
+  vehicleTypes: string[];
   products: ProductRow[];
   onCancel: () => void;
   onSaved: (issue: IssueRow) => void;
   onDeleted: (id: number) => void;
 }) {
-  const [mainCategory, setMainCategory] = useState(issue?.main_category ?? MAIN_CATEGORIES[0]);
+  const [mainCategory, setMainCategory] = useState(issue?.main_category ?? mainCategories[0]);
   const [issueType, setIssueType] = useState<string>(issue?.issue_type ?? "support");
   const [vehicleType, setVehicleType] = useState<string>(issue?.vehicle_type ?? "");
   const [subCategory, setSubCategory] = useState(issue?.sub_category ?? "");
@@ -198,8 +199,8 @@ export function IssueEditor({
           {/* Category hierarchy */}
           <div className="flex flex-wrap gap-4">
             <Field label="Main category" className="min-w-48 flex-1">
-              <Select value={mainCategory} onChange={(v) => setMainCategory(v as typeof mainCategory)}>
-                {MAIN_CATEGORIES.map((c) => (
+              <Select value={mainCategory} onChange={setMainCategory}>
+                {mainCategories.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
@@ -223,7 +224,7 @@ export function IssueEditor({
             <Field label="Issue type" className="min-w-40 flex-1">
               <Select value={issueType} onChange={setIssueType}>
                 <option value="">— none —</option>
-                {ISSUE_TYPES.map((t) => (
+                {issueTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>
@@ -233,7 +234,7 @@ export function IssueEditor({
             <Field label="Vehicle type" className="min-w-40 flex-1">
               <Select value={vehicleType} onChange={setVehicleType}>
                 <option value="">— none —</option>
-                {VEHICLE_TYPES.map((t) => (
+                {vehicleTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>

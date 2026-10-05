@@ -2,65 +2,19 @@
 // Numeric-looking PKs come back as strings from PostgREST for bigint columns, but we type the
 // ones we read/write as numbers and coerce at the wire (route handlers) where it matters.
 
-// Postgres enum `dashboard.main_category` — the full domain, needed for the create/edit select.
-export const MAIN_CATEGORIES = [
-  "bike_breakdown",
-  "bike_accident",
-  "blocked_bike",
-  "smartphone",
-  "family_emergency",
-  "payment_issue",
-  "anda",
-  "yango",
-  "disengaged",
-  "expired_documentation",
-  "bike_confiscated",
-  "illness",
-  "police",
-  "on_order_bike_accident",
-  "off_order_bike_accident",
-  "vendor",
-  "careem",
-  "product",
-  "shift_calendar",
-  "theft",
-  "unable_to_work",
-  "vacation",
-  "hours_online",
-  "trips",
-  "inactive",
-  "anda_kamba",
-  "anda_piloto",
-  "agency",
-  "deliveroo",
-  "emergency",
-  "motorbike",
-  "motorbike_accident_on_duty",
-  "motorbike_accident_off_duty",
-  "motorbike_confiscation",
-  "shift_schedule",
-  "car_breakdown",
-  "blocked_car",
-  "car_confiscated",
-  "car_accident",
-  "churn",
-  "new",
-  "EMA",
-  "net_earnings",
-  "bolt",
-  "payments",
-  "active",
-  "suspended",
-] as const;
-export type MainCategory = (typeof MAIN_CATEGORIES)[number];
+// The three enum columns of issues_list (`dashboard.main_category`, `.issue_type`,
+// `.vehicle_type`; the last is nullable). Their values are added in the DB — main categories as
+// platforms onboard — so they are read from it (listIssueEnums), never listed here.
+export type MainCategory = string;
+export type IssueType = string;
+export type VehicleType = string;
 
-// Postgres enum `dashboard.issue_type`.
-export const ISSUE_TYPES = ["support", "performance", "training"] as const;
-export type IssueType = (typeof ISSUE_TYPES)[number];
-
-// Postgres enum `dashboard.vehicle_type` (the column is nullable).
-export const VEHICLE_TYPES = ["bike", "car"] as const;
-export type VehicleType = (typeof VEHICLE_TYPES)[number];
+// The full domain of each enum, in declaration order.
+export interface IssueEnums {
+  mainCategories: string[];
+  issueTypes: string[];
+  vehicleTypes: string[];
+}
 
 export interface IssueRow {
   id: number;

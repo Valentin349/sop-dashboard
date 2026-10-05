@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
-import { ISSUE_TYPES } from "@/lib/issues/types";
 import type { ProductRow } from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
 import { cn } from "@/lib/utils";
@@ -15,6 +14,7 @@ export function IssueSearchBar({
   query,
   onQueryChange,
   products,
+  issueTypes,
   typeFilter,
   productFilter,
   vehicleFilter,
@@ -29,6 +29,7 @@ export function IssueSearchBar({
   query: string;
   onQueryChange: (value: string) => void;
   products: ProductRow[];
+  issueTypes: string[];
   typeFilter: string[];
   productFilter: number[];
   vehicleFilter: string[];
@@ -130,7 +131,7 @@ export function IssueSearchBar({
         <div className="absolute inset-x-0 top-full z-50 mt-2 space-y-3 rounded-lg border bg-popover p-3 text-popover-foreground shadow-md">
           <TagToggleGroup
             label="Issue type"
-            options={ISSUE_TYPES.map((t) => ({ value: t, label: t }))}
+            options={issueTypes.map((t) => ({ value: t, label: t }))}
             selected={typeFilter}
             onChange={(n) => onTypeFilter(n as string[])}
           />

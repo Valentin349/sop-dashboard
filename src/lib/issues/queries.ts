@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getServerClient } from "@/lib/supabase/server";
-import type { IssueRow, SopRef } from "./types";
+import type { IssueEnums, IssueRow, SopRef } from "./types";
 
 // Reads from dashboard.issues_list (a different schema than SOPs). No caching: a platform change
 // refetches fresh so the tab always mirrors the DB (issues are also written by the AI pipeline).
@@ -56,6 +56,25 @@ export async function listIssuesByPlatform(platformId: number): Promise<IssueRow
       .range(from, to),
   );
   return rows.map(normalizeIssue);
+}
+
+// The full domain of the issues_list enum columns, in declaration order. PostgREST can't query
+// pg_enum, but its OpenAPI description of the schema lists each enum column's values.
+export async function listIssueEnums(): Promise<IssueEnums> {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}`, "Accept-Profile": "dashboard" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Reading the dashboard schema failed (${res.status})`);
+  const spec = await res.json();
+  const values = (column: string): string[] =>
+    spec.definitions?.issues_list?.properties?.[column]?.enum ?? [];
+  return {
+    mainCategories: values("main_category"),
+    issueTypes: values("issue_type"),
+    vehicleTypes: values("vehicle_type"),
+  };
 }
 
 export async function getIssue(id: number | string): Promise<IssueRow | null> {

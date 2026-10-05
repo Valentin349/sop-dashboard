@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardList, Plus, RefreshCw } from "lucide-react";
 
 import type { Role } from "@/lib/auth/session";
-import type { IssueRow } from "@/lib/issues/types";
+import type { IssueEnums, IssueRow } from "@/lib/issues/types";
 import type { PlatformRow, ProductRow } from "@/lib/sops/types";
 import {
   buildIssueColumns,
@@ -29,12 +29,15 @@ export function IssuesDashboard({
   initialPlatformId,
   initialIssueId,
   initialIssues,
+  enums,
   role,
 }: {
   platforms: PlatformRow[];
   initialPlatformId: number | null;
   initialIssueId: number | null;
   initialIssues: IssueRow[];
+  // The DB's enum values, for the editor's dropdowns and the type filter.
+  enums: IssueEnums;
   role: Role;
 }) {
   const isAdmin = role === "admin";
@@ -260,6 +263,7 @@ export function IssuesDashboard({
           query={query}
           onQueryChange={setQuery}
           products={products}
+          issueTypes={enums.issueTypes}
           typeFilter={typeFilter}
           productFilter={productFilter}
           vehicleFilter={vehicleFilter}
@@ -315,6 +319,9 @@ export function IssuesDashboard({
               mode="create"
               issue={null}
               platformId={platformId}
+              mainCategories={enums.mainCategories}
+              issueTypes={enums.issueTypes}
+              vehicleTypes={enums.vehicleTypes}
               products={products}
               onCancel={cancelEdit}
               onSaved={onIssueSaved}
@@ -325,6 +332,9 @@ export function IssuesDashboard({
               mode="edit"
               issue={selectedIssue}
               platformId={platformId}
+              mainCategories={enums.mainCategories}
+              issueTypes={enums.issueTypes}
+              vehicleTypes={enums.vehicleTypes}
               products={products}
               onCancel={cancelEdit}
               onSaved={onIssueSaved}
