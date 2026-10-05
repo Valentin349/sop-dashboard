@@ -3,14 +3,6 @@ import { NextResponse } from "next/server";
 import { listIssuesByPlatform } from "@/lib/issues/queries";
 import { createIssue } from "@/lib/issues/mutations";
 import type { IssueFields, IssuePatch } from "@/lib/issues/mutations";
-import {
-  ISSUE_TYPES,
-  MAIN_CATEGORIES,
-  VEHICLE_TYPES,
-  type IssueType,
-  type MainCategory,
-  type VehicleType,
-} from "@/lib/issues/types";
 import { requireApi } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +17,6 @@ function intOrNull(v: unknown): number | null {
   if (v === null || v === "" || v === undefined) return null;
   const n = Number(v);
   return Number.isInteger(n) ? n : null;
-}
-function enumOrNull<T extends string>(v: unknown, allowed: readonly T[]): T | null {
-  return typeof v === "string" && (allowed as readonly string[]).includes(v)
-    ? (v as T)
-    : null;
 }
 function idArray(v: unknown): number[] {
   return Array.isArray(v) ? v.map(Number).filter(Number.isInteger) : [];
@@ -66,12 +53,11 @@ export function parseIssueFields(
     (out as Record<string, unknown>)[k] = v;
   };
 
-  if (!partial || has("main_category"))
-    set("main_category", enumOrNull<MainCategory>(body.main_category, MAIN_CATEGORIES));
-  if (!partial || has("issue_type"))
-    set("issue_type", enumOrNull<IssueType>(body.issue_type, ISSUE_TYPES));
-  if (!partial || has("vehicle_type"))
-    set("vehicle_type", enumOrNull<VehicleType>(body.vehicle_type, VEHICLE_TYPES));
+  // Not checked against a list here: these columns are Postgres enums, so the DB refuses a value
+  // outside one and the save fails with that message.
+  for (const k of ["main_category", "issue_type", "vehicle_type"] as const) {
+    if (!partial || has(k)) set(k, str(body[k]));
+  }
 
   for (const k of textFields) {
     if (!partial || has(k)) set(k, str(body[k]));

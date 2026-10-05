@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Loader2, Plus, Trash2 } from "lucide-react";
 
-import {
-  ISSUE_TYPES,
-  MAIN_CATEGORIES,
-  VEHICLE_TYPES,
-  type IssueRow,
-} from "@/lib/issues/types";
+import type { IssueRow } from "@/lib/issues/types";
 import type { ProductRow } from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
 import { TagToggleGroup } from "./tag-controls";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 type Mode = "edit" | "create";
 
@@ -21,6 +23,12 @@ async function failIfNotOk(res: Response, fallback: string): Promise<unknown> {
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error((data as { error?: string })?.error ?? `${fallback} (${res.status})`);
   return data;
+}
+
+// The non-blank values of a category level, each once, sorted.
+function distinct(values: (string | null)[]): string[] {
+  const set = new Set(values.map((v) => (v ?? "").trim()).filter(Boolean));
+  return [...set].sort((a, b) => a.localeCompare(b));
 }
 
 // A comma/space/newline separated list of SOP ids ⇆ number[].
@@ -35,6 +43,10 @@ export function IssueEditor({
   mode,
   issue,
   platformId,
+  mainCategories,
+  issues,
+  issueTypes,
+  vehicleTypes,
   products,
   onCancel,
   onSaved,
@@ -43,12 +55,18 @@ export function IssueEditor({
   mode: Mode;
   issue: IssueRow | null;
   platformId: number;
+  // The main categories this platform's issues already use — the same set the menu shows.
+  mainCategories: string[];
+  // The platform's issues — the sub and sub-sub fields suggest the values already in use.
+  issues: IssueRow[];
+  issueTypes: string[];
+  vehicleTypes: string[];
   products: ProductRow[];
   onCancel: () => void;
   onSaved: (issue: IssueRow) => void;
   onDeleted: (id: number) => void;
 }) {
-  const [mainCategory, setMainCategory] = useState(issue?.main_category ?? MAIN_CATEGORIES[0]);
+  const [mainCategory, setMainCategory] = useState(issue?.main_category ?? mainCategories[0]);
   const [issueType, setIssueType] = useState<string>(issue?.issue_type ?? "support");
   const [vehicleType, setVehicleType] = useState<string>(issue?.vehicle_type ?? "");
   const [subCategory, setSubCategory] = useState(issue?.sub_category ?? "");
@@ -69,6 +87,16 @@ export function IssueEditor({
   const [productTags, setProductTags] = useState<number[]>(issue?.product_tags ?? []);
   const [vehicleTags, setVehicleTags] = useState<string[]>(issue?.vehicle_tags ?? []);
   const [statusTags, setStatusTags] = useState<string[]>(issue?.driver_status_tags ?? []);
+
+  // Sub and sub-sub are free text in the DB, so a misspelt value silently opens a new folder.
+  // Offer what already sits under the levels chosen above; a new value is an explicit choice.
+  const under = issues.filter((i) => i.main_category === mainCategory);
+  const subOptions = distinct(under.map((i) => i.sub_category));
+  const subSubOptions = distinct(
+    under
+      .filter((i) => (i.sub_category ?? "").trim() === subCategory.trim())
+      .map((i) => i.sub_sub_category),
+  );
 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -198,22 +226,16 @@ export function IssueEditor({
           {/* Category hierarchy */}
           <div className="flex flex-wrap gap-4">
             <Field label="Main category" className="min-w-48 flex-1">
-              <Select value={mainCategory} onChange={(v) => setMainCategory(v as typeof mainCategory)}>
-                {MAIN_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
+              <Select value={mainCategory} onChange={setMainCategory} options={mainCategories} />
             </Field>
             <Field label="Sub category" className="min-w-48 flex-1">
-              <TextInput value={subCategory} onChange={setSubCategory} placeholder="e.g. mechanical" />
+              <CategoryPicker value={subCategory} onChange={setSubCategory} options={subOptions} />
             </Field>
             <Field label="Sub-sub category" className="min-w-48 flex-1">
-              <TextInput
+              <CategoryPicker
                 value={subSubCategory}
                 onChange={setSubSubCategory}
-                placeholder="e.g. engine"
+                options={subSubOptions}
               />
             </Field>
           </div>
@@ -221,24 +243,10 @@ export function IssueEditor({
           {/* Classification */}
           <div className="flex flex-wrap gap-4">
             <Field label="Issue type" className="min-w-40 flex-1">
-              <Select value={issueType} onChange={setIssueType}>
-                <option value="">— none —</option>
-                {ISSUE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </Select>
+              <Select value={issueType} onChange={setIssueType} options={issueTypes} none />
             </Field>
             <Field label="Vehicle type" className="min-w-40 flex-1">
-              <Select value={vehicleType} onChange={setVehicleType}>
-                <option value="">— none —</option>
-                {VEHICLE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </Select>
+              <Select value={vehicleType} onChange={setVehicleType} options={vehicleTypes} none />
             </Field>
           </div>
 
@@ -353,11 +361,13 @@ function TextInput({
   onChange,
   placeholder,
   inputMode,
+  autoFocus,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   inputMode?: "numeric";
+  autoFocus?: boolean;
 }) {
   return (
     <input
@@ -365,6 +375,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       inputMode={inputMode}
+      autoFocus={autoFocus}
       className={CONTROL}
     />
   );
@@ -389,18 +400,113 @@ function TextArea({
   );
 }
 
-function Select({
+// A free-text category level shown as a dropdown of the values already in use, with an explicit
+// "New…" entry that swaps it for a text box.
+function CategoryPicker({
   value,
   onChange,
-  children,
+  options,
 }: {
   value: string;
   onChange: (v: string) => void;
-  children: React.ReactNode;
+  options: string[];
+}) {
+  const [typing, setTyping] = useState(false);
+
+  if (typing) {
+    return (
+      <div className="flex gap-2">
+        <TextInput value={value} onChange={onChange} placeholder="New name" autoFocus />
+        <button
+          type="button"
+          onClick={() => {
+            setTyping(false);
+            if (!options.includes(value.trim())) onChange("");
+          }}
+          className="shrink-0 rounded-md border px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          Pick existing
+        </button>
+      </div>
+    );
+  }
+
+  // Keep a value that isn't under the levels chosen above selectable, so it is never lost.
+  const current = value.trim();
+  const shown = current && !options.includes(current) ? [current, ...options] : options;
+  return (
+    <Select
+      value={current}
+      onChange={onChange}
+      options={shown}
+      none
+      onNew={() => {
+        setTyping(true);
+        onChange("");
+      }}
+    />
+  );
+}
+
+// Base UI marks the entry under the pointer (or the arrow keys) with data-highlighted. The tint
+// is the menu's own hover — the theme's accent is too close to white to see on a popover.
+const ITEM =
+  "cursor-pointer hover:bg-muted-foreground/20 focus:bg-muted-foreground/20 data-highlighted:bg-muted-foreground/20";
+
+// A dropdown drawn by the app rather than the browser, so the entries that are not values —
+// "None" and "New…" — can look unlike the values between them.
+function Select({
+  value,
+  onChange,
+  options,
+  none = false,
+  onNew,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  // Offer an empty choice.
+  none?: boolean;
+  // Offer a "New…" entry.
+  onNew?: () => void;
 }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={CONTROL}>
-      {children}
-    </select>
+    <DropdownMenu>
+      <DropdownMenuTrigger className={`${CONTROL} flex items-center justify-between gap-2 text-left transition-colors hover:bg-muted-foreground/10`}>
+        <span className={value ? "truncate" : "truncate italic text-muted-foreground"}>
+          {value || "None"}
+        </span>
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="max-h-72">
+        {none && (
+          <>
+            <DropdownMenuItem
+              onClick={() => onChange("")}
+              className={`${ITEM} italic text-muted-foreground`}
+            >
+              None
+              {value === "" && <Check className="ml-auto" />}
+            </DropdownMenuItem>
+            {options.length > 0 && <DropdownMenuSeparator />}
+          </>
+        )}
+        {options.map((o) => (
+          <DropdownMenuItem key={o} onClick={() => onChange(o)} className={ITEM}>
+            <span className="truncate">{o}</span>
+            {o === value && <Check className="ml-auto" />}
+          </DropdownMenuItem>
+        ))}
+        {onNew && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onNew} className={`${ITEM} font-medium text-primary`}>
+              <Plus />
+              New…
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

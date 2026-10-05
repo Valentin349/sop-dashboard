@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { listPlatforms } from "@/lib/sops/queries";
-import { listIssuesByPlatform } from "@/lib/issues/queries";
+import { listIssuesByPlatform, listIssueEnums } from "@/lib/issues/queries";
 import { getCurrentUser, hasAccess } from "@/lib/auth/session";
 import { IssuesDashboard } from "@/components/issues-dashboard";
 
@@ -24,7 +24,7 @@ export default async function IssuesPage({
 
   const params = await searchParams;
 
-  const platforms = await listPlatforms();
+  const [platforms, enums] = await Promise.all([listPlatforms(), listIssueEnums()]);
   const platformId = toId(params.platform) ?? platforms[0]?.id ?? null;
 
   // The corpus is small (≤~75 rows/platform) and the tree derives from it, so seed the whole
@@ -37,6 +37,7 @@ export default async function IssuesPage({
       initialPlatformId={platformId}
       initialIssueId={toId(params.issue)}
       initialIssues={initialIssues}
+      enums={enums}
       role={role}
     />
   );
