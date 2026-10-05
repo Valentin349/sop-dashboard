@@ -36,7 +36,7 @@ export function IssuesDashboard({
   initialPlatformId: number | null;
   initialIssueId: number | null;
   initialIssues: IssueRow[];
-  // The DB's enum values, for the editor's dropdowns and the type filter.
+  // The DB's enum values. The main categories are only offered on a platform with no issues yet.
   enums: IssueEnums;
   role: Role;
 }) {
@@ -185,6 +185,12 @@ export function IssuesDashboard({
   const issues = platformId != null ? issueCache[platformId] : undefined;
   const root = useMemo(() => buildIssueColumns(issues ?? []), [issues]);
   const selectedIssue = issues?.find((i) => i.id === issueId) ?? null;
+  // The editor's main-category options: only what this platform uses, in the menu's order. A
+  // platform with no issues yet has none of its own, so it gets the whole enum.
+  const mainCategories = useMemo(() => {
+    const used = [...new Set(issues?.flatMap((i) => i.main_category ?? []))];
+    return used.length > 0 ? used : enums.mainCategories;
+  }, [issues, enums.mainCategories]);
   const products = (platformId != null ? productCache[platformId] : undefined) ?? [];
 
   const activeFilterCount =
@@ -319,7 +325,7 @@ export function IssuesDashboard({
               mode="create"
               issue={null}
               platformId={platformId}
-              mainCategories={enums.mainCategories}
+              mainCategories={mainCategories}
               issueTypes={enums.issueTypes}
               vehicleTypes={enums.vehicleTypes}
               products={products}
@@ -332,7 +338,7 @@ export function IssuesDashboard({
               mode="edit"
               issue={selectedIssue}
               platformId={platformId}
-              mainCategories={enums.mainCategories}
+              mainCategories={mainCategories}
               issueTypes={enums.issueTypes}
               vehicleTypes={enums.vehicleTypes}
               products={products}
