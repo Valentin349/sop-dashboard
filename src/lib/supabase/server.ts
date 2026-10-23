@@ -5,12 +5,12 @@ import { createClient } from "@supabase/supabase-js";
 // Service-role client. Bypasses RLS — must never be imported into a Client Component.
 // The `server-only` import above makes such a bundle fail at build time.
 
-const url = process.env.SUPABASE_URL;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceRoleKey) {
   throw new Error(
-    "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Copy them into .env.local (see .env.example).",
+    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Copy them into .env.local (see .env.example).",
   );
 }
 

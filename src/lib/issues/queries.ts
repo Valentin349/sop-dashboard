@@ -62,7 +62,7 @@ export async function listIssuesByPlatform(platformId: number): Promise<IssueRow
 // pg_enum, but its OpenAPI description of the schema lists each enum column's values.
 export async function listIssueEnums(): Promise<IssueEnums> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/`, {
     headers: { apikey: key, Authorization: `Bearer ${key}`, "Accept-Profile": "dashboard" },
     cache: "no-store",
   });

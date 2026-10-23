@@ -26,7 +26,7 @@ Queries live in `src/lib/sops/queries.ts` (range-paginated reads mirroring
 
 ```bash
 cp .env.example .env.local
-# Fill SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (copy from driver-context-manager/.env)
+# Fill NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (copy from driver-context-manager/.env)
 npm install
 npm run dev   # http://localhost:3000
 ```
