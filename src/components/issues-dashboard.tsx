@@ -326,6 +326,7 @@ export function IssuesDashboard({
               issue={null}
               platformId={platformId}
               mainCategories={mainCategories}
+              allMainCategories={enums.mainCategories}
               issues={issues ?? []}
               issueTypes={enums.issueTypes}
               vehicleTypes={enums.vehicleTypes}
@@ -340,6 +341,7 @@ export function IssuesDashboard({
               issue={selectedIssue}
               platformId={platformId}
               mainCategories={mainCategories}
+              allMainCategories={enums.mainCategories}
               issues={issues ?? []}
               issueTypes={enums.issueTypes}
               vehicleTypes={enums.vehicleTypes}

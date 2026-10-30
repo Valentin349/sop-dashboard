@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { deleteIssue, updateIssue } from "@/lib/issues/mutations";
 import { requireApi } from "@/lib/auth/session";
-import { parseIssueFields } from "../route";
+import { dbErrorStatus, parseIssueFields } from "../route";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const issue = await updateIssue(id, patch);
     return NextResponse.json({ issue });
   } catch (e) {
-    return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
+    return NextResponse.json(
+      { error: String((e as Error).message) },
+      { status: dbErrorStatus(e) },
+    );
   }
 }
 

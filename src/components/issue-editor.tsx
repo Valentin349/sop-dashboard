@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, Loader2, Plus, Trash2 } from "lucide-react";
 
-import type { IssueRow } from "@/lib/issues/types";
+import { MAIN_CATEGORY_PATTERN, type IssueRow } from "@/lib/issues/types";
 import type { ProductRow } from "@/lib/sops/types";
 import { DRIVER_STATUS_TAGS, VEHICLE_TAGS } from "@/lib/sops/tags";
 import { TagToggleGroup } from "./tag-controls";
@@ -44,6 +44,7 @@ export function IssueEditor({
   issue,
   platformId,
   mainCategories,
+  allMainCategories,
   issues,
   issueTypes,
   vehicleTypes,
@@ -57,6 +58,9 @@ export function IssueEditor({
   platformId: number;
   // The main categories this platform's issues already use — the same set the menu shows.
   mainCategories: string[];
+  // The whole enum. A typed name that matches one of these is reused as is; any other name is
+  // added to the enum on save (admin, through /api/issues/main-categories).
+  allMainCategories: string[];
   // The platform's issues — the sub and sub-sub fields suggest the values already in use.
   issues: IssueRow[];
   issueTypes: string[];
@@ -115,8 +119,24 @@ export function IssueEditor({
       return;
     }
 
+    // main_category is a Postgres enum. A name the enum already has (any casing) is used as
+    // stored; a new one must pass the label rule and is added before the issue is written.
+    const typedMain = mainCategory.trim();
+    if (!typedMain) {
+      setError("Pick a main category.");
+      return;
+    }
+    const knownMain = allMainCategories.find((c) => c.toLowerCase() === typedMain.toLowerCase());
+    if (!knownMain && !MAIN_CATEGORY_PATTERN.test(typedMain)) {
+      setError(
+        "A main category is letters, digits and underscores, starting with a letter (e.g. fuel_card).",
+      );
+      return;
+    }
+    let main = knownMain ?? typedMain;
+
     const payload = {
-      main_category: mainCategory,
+      main_category: main,
       issue_type: issueType || null,
       vehicle_type: vehicleType || null,
       sub_category: subCategory,
@@ -137,6 +157,18 @@ export function IssueEditor({
 
     setSaving(true);
     try {
+      if (!knownMain) {
+        // DDL behind an RPC, on its own admin endpoint. If this fails nothing is written.
+        const r = await fetch("/api/issues/main-categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: typedMain }),
+        });
+        const d = (await failIfNotOk(r, "Could not add the main category")) as { name: string };
+        main = d.name;
+        payload.main_category = main;
+        setMainCategory(main);
+      }
       const res =
         mode === "create"
           ? await fetch("/api/issues", {
@@ -226,7 +258,13 @@ export function IssueEditor({
           {/* Category hierarchy */}
           <div className="flex flex-wrap gap-4">
             <Field label="Main category" className="min-w-48 flex-1">
-              <Select value={mainCategory} onChange={setMainCategory} options={mainCategories} />
+              <CategoryPicker
+                value={mainCategory}
+                onChange={setMainCategory}
+                options={mainCategories}
+                none={false}
+                hint="A name another platform already uses is reused; a new one is added to the shared list for every platform when you save."
+              />
             </Field>
             <Field label="Sub category" className="min-w-48 flex-1">
               <CategoryPicker value={subCategory} onChange={setSubCategory} options={subOptions} />
@@ -400,33 +438,43 @@ function TextArea({
   );
 }
 
-// A free-text category level shown as a dropdown of the values already in use, with an explicit
-// "New…" entry that swaps it for a text box.
+// A category level shown as a dropdown of the values already in use, with an explicit "New…"
+// entry that swaps it for a text box. Sub and sub-sub are free text in the DB; the main level is
+// an enum, so its new names are added on save (see IssueEditor.save) and it has no "None".
 function CategoryPicker({
   value,
   onChange,
   options,
+  none = true,
+  hint,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: string[];
+  // Offer an empty choice (not for main_category, which is required).
+  none?: boolean;
+  // Shown under the text box while typing a new name.
+  hint?: string;
 }) {
   const [typing, setTyping] = useState(false);
 
   if (typing) {
     return (
-      <div className="flex gap-2">
-        <TextInput value={value} onChange={onChange} placeholder="New name" autoFocus />
-        <button
-          type="button"
-          onClick={() => {
-            setTyping(false);
-            if (!options.includes(value.trim())) onChange("");
-          }}
-          className="shrink-0 rounded-md border px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          Pick existing
-        </button>
+      <div>
+        <div className="flex gap-2">
+          <TextInput value={value} onChange={onChange} placeholder="New name" autoFocus />
+          <button
+            type="button"
+            onClick={() => {
+              setTyping(false);
+              if (!options.includes(value.trim())) onChange(none ? "" : (options[0] ?? ""));
+            }}
+            className="shrink-0 rounded-md border px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            Pick existing
+          </button>
+        </div>
+        {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
       </div>
     );
   }
@@ -439,7 +487,7 @@ function CategoryPicker({
       value={current}
       onChange={onChange}
       options={shown}
-      none
+      none={none}
       onNew={() => {
         setTyping(true);
         onChange("");

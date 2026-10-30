@@ -71,3 +71,20 @@ export async function deleteIssue(id: number): Promise<void> {
     .eq("id", id);
   if (error) throw error;
 }
+
+// Adds a value to the enum `dashboard.main_category` through the `dashboard.add_main_category`
+// RPC (db/issue-main-categories.sql; security definer, service_role only). PostgREST cannot run
+// DDL itself, so the function is the one path. `add value if not exists` makes it idempotent.
+export async function addMainCategory(name: string): Promise<void> {
+  const db = getServerClient();
+  const { error } = await db.schema("dashboard").rpc("add_main_category", { p_name: name });
+  if (error) {
+    // PGRST202 = no such function: the SQL has not been applied to this database.
+    if (error.code === "PGRST202") {
+      throw new Error(
+        "The database is missing dashboard.add_main_category — run db/issue-main-categories.sql in the Supabase SQL editor first.",
+      );
+    }
+    throw new Error(error.message);
+  }
+}

@@ -25,6 +25,12 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
+// A write Postgres rejected for a bad value (22P02 invalid_text_representation — e.g. a
+// main_category outside the enum) is the caller's fault, not a server failure.
+export function dbErrorStatus(e: unknown): number {
+  return (e as { code?: string })?.code === "22P02" ? 400 : 500;
+}
+
 // Map a request body to an issue field set. `partial` (PATCH) only pulls keys the caller sent,
 // so untouched columns keep their value; a full parse (POST) supplies every column with a default.
 export function parseIssueFields(body: Record<string, unknown>, partial: true): IssuePatch;
@@ -109,6 +115,9 @@ export async function POST(req: Request) {
     const issue = await createIssue({ platform_id, ...fields });
     return NextResponse.json({ issue }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
+    return NextResponse.json(
+      { error: String((e as Error).message) },
+      { status: dbErrorStatus(e) },
+    );
   }
 }

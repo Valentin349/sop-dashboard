@@ -349,6 +349,28 @@ no write path, by design. It exists to replace reading n8n failure emails and sc
 - Routes: `GET /api/turns` (one feed page), `GET /api/turns/[id]`, `GET /api/turns/summary` (the
   period summary, which also carries the chip counts; viewer).
 
+## Issue lists — categories
+
+`dashboard.issues_list` has three enum columns (`main_category`, `issue_type`, `vehicle_type`);
+sub and sub-sub category are free text. An issue IS its deepest non-null level, so "a new main
+category" is just an issue whose `main_category` is a value the enum doesn't have yet.
+
+- **Enum domains are never hardcoded.** `listIssueEnums` (queries.ts) reads them from PostgREST's
+  OpenAPI document (`definitions.issues_list.properties.<col>.enum`) — PostgREST can't query
+  `pg_enum`. The page seeds them once. A hardcoded copy fell five values behind within weeks.
+- The editor's main-category menu shows only the values **this platform's issues use** (the whole
+  enum on an empty platform). "New…" swaps it for a text box: a typed name that exists in the enum
+  under any casing is reused; anything else is **added to the enum on save** through
+  `POST /api/issues/main-categories` (admin) → RPC `dashboard.add_main_category(text)` in
+  `db/issue-main-categories.sql` (`security definer`, `service_role` only; applied 2026-10-30).
+  The RPC exists because PostgREST cannot run DDL. The route is idempotent (`add value if not
+  exists`) and returns the canonical label.
+- Label rule, enforced in the editor, the route and the RPC: `MAIN_CATEGORY_PATTERN`
+  (identifier-like, ≤63 chars). Every other consumer of the column — `driver-context-manager`, the
+  Odoo add-on, `ascense-dashboard` — reads it as plain text, so a new label needs no change there.
+- Routes pass the enum columns through as text; Postgres is the validator, and `22P02` (value
+  outside the enum) maps to 400 (`dbErrorStatus`).
+
 ## Conventions
 
 - Keep secrets server-side (above). This is the one rule that must not bend.

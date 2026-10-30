@@ -16,6 +16,12 @@ export interface IssueEnums {
   vehicleTypes: string[];
 }
 
+// Shape of a main-category label. New ones are added to the enum through the
+// `dashboard.add_main_category` RPC (db/issue-main-categories.sql), which enforces the same rule:
+// identifier-like, so the value is safe in URLs, PostgREST filters and the n8n workflows that
+// match on it. Enum labels are capped at 63 bytes by Postgres.
+export const MAIN_CATEGORY_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,62}$/;
+
 export interface IssueRow {
   id: number;
   created_at: string;
