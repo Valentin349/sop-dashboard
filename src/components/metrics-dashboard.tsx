@@ -9,16 +9,15 @@ import {
   type MetricId,
   type MetricResponses,
   type AvgTimeToRespond,
-  type AiAcceptanceRate,
+  type LifetimeResponseRate,
   type MedianOutreach,
-  type OutreachResponseRate,
   type ResponseRate,
   type SustainedEngagement,
 } from "@/lib/metrics/types";
 import { cn } from "@/lib/utils";
 
-// Which metrics honour the date range, and which honour the platform filter. The rest are
-// "lifetime" aggregates the API computes ignoring both (outreach-response-rate, median-outreach).
+// Which metrics honour the date range, and which honour the platform filter. A "lifetime"
+// metric is in the second set only: all dates, one platform or all.
 const DATE_METRICS = new Set<MetricId>([
   "response-rate",
   "active-driver-response-rate",
@@ -30,7 +29,8 @@ const PLATFORM_METRICS = new Set<MetricId>([
   "active-driver-response-rate",
   "sustained-engagement",
   "avg-time-to-respond",
-  "ai-acceptance-rate",
+  "lifetime-response-rate",
+  "median-outreach",
 ]);
 
 // The metrics that expose a per-agent × platform breakdown table.
@@ -39,7 +39,6 @@ const BREAKDOWN_METRICS: { id: MetricId; label: string }[] = [
   { id: "active-driver-response-rate", label: "Active drivers" },
   { id: "sustained-engagement", label: "Sustained engagement" },
   { id: "avg-time-to-respond", label: "Avg time to respond" },
-  { id: "ai-acceptance-rate", label: "AI acceptance" },
 ];
 
 type DataMap = Partial<{ [K in MetricId]: MetricResponses[K] }>;
@@ -208,8 +207,8 @@ export function MetricsDashboard({
         <p className="mb-2 px-0.5 text-[11px] text-muted-foreground">
           Cards tagged{" "}
           <span className="font-medium text-foreground">Period</span> follow the date range and
-          platform filter; <span className="font-medium text-foreground">Lifetime</span> cards are
-          computed across all data.
+          platform filter; <span className="font-medium text-foreground">Lifetime</span> cards cover
+          all dates and follow the platform filter only.
         </p>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -281,8 +280,7 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
   const ad = data["active-driver-response-rate"] as ResponseRate | undefined;
   const se = data["sustained-engagement"] as SustainedEngagement | undefined;
   const at = data["avg-time-to-respond"] as AvgTimeToRespond | undefined;
-  const or = data["outreach-response-rate"] as OutreachResponseRate | undefined;
-  const ai = data["ai-acceptance-rate"] as AiAcceptanceRate | undefined;
+  const lr = data["lifetime-response-rate"] as LifetimeResponseRate | undefined;
   const mo = data["median-outreach"] as MedianOutreach | undefined;
 
   // Size of the active cohort; 0 or absent means the platform doesn't use driver_type at
@@ -338,23 +336,14 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
       target: at ? `median ≤ ${fmtMinutes(at.kpi_target_minutes)}` : undefined,
       meets: at?.meets_kpi,
     }),
-    card("outreach-response-rate", {
-      title: "Outreach → conversation",
+    card("lifetime-response-rate", {
+      title: "Lifetime response rate",
       scope: "Lifetime",
-      value: or ? fmtPct(or.rate_pct) : "—",
-      sub: or
-        ? `${fmtInt(or.total_with_conversation)} / ${fmtInt(or.total_outreached)} outreached converted`
+      value: lr ? fmtPct(lr.rate_pct) : "—",
+      sub: lr
+        ? `${fmtInt(lr.total_responded)} / ${fmtInt(lr.total_messaged)} drivers`
         : "",
-      target: or ? `≥ ${or.kpi_target_pct}%` : undefined,
-      meets: or?.meets_kpi,
-    }),
-    card("ai-acceptance-rate", {
-      title: "AI acceptance rate",
-      scope: "Lifetime",
-      value: ai ? fmtPct(ai.acceptance_rate_pct) : "—",
-      sub: ai
-        ? `${fmtInt(ai.total_accepts)} / ${fmtInt(ai.total_suggests)} suggestions accepted`
-        : "",
+      note: "Drivers we successfully messaged who ever wrote to us",
     }),
     card("median-outreach", {
       title: "Median outreach to response",
@@ -363,8 +352,10 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
       sub: mo
         ? `mean ${fmtCount(mo.mean_outreach_count)} · max ${fmtInt(mo.max_outreach_count)} · ${fmtInt(mo.total_drivers)} drivers`
         : "",
-      target: mo ? `≤ ${mo.kpi_target}` : undefined,
-      meets: mo?.meets_kpi,
+      note: "Opening templates sent before a driver's first message",
+      // An empty platform would otherwise read "Below target" off a zero.
+      target: mo?.total_drivers ? `≤ ${mo.kpi_target}` : undefined,
+      meets: mo?.total_drivers ? mo.meets_kpi : undefined,
     }),
   ];
 }
@@ -451,10 +442,6 @@ const BREAKDOWN_COLUMNS: Record<string, { headers: string[]; numericFrom: number
     headers: ["Agent", "Platform", "Type", "Responses", "Median", "Mean"],
     numericFrom: 3,
   },
-  "ai-acceptance-rate": {
-    headers: ["Agent", "Platform", "Convos", "Suggests", "Accepts", "Rejects", "Ignored", "Rate"],
-    numericFrom: 2,
-  },
 };
 
 // Alternating-row background. Uses muted-foreground at a real opacity step (NOT a bracketed
@@ -528,24 +515,6 @@ function buildRows(metricId: MetricId, data: DataMap): Row[] | null {
         });
       });
       return rows;
-    }
-    case "ai-acceptance-rate": {
-      const d = data["ai-acceptance-rate"];
-      if (!d) return null;
-      return d.per_agent_platform.map((r, i) => ({
-        key: `${r.agent_id}-${r.platform_id}-${i}`,
-        group: i,
-        cells: [
-          agentName(r.agent_name),
-          platName(r.platform_name, r.platform_id),
-          fmtInt(r.conversations),
-          fmtInt(r.suggests),
-          fmtInt(r.accepts),
-          fmtInt(r.rejects),
-          fmtInt(r.ignored),
-          fmtPct(r.acceptance_rate_pct),
-        ],
-      }));
     }
     default:
       return null;

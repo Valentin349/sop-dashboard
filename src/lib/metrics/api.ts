@@ -19,8 +19,7 @@ export const METRIC_PATHS: Record<MetricId, string> = {
   "active-driver-response-rate": "/metrics/response-rate/",
   "sustained-engagement": "/metrics/sustained-engagement/",
   "avg-time-to-respond": "/metrics/avg-time-to-respond/",
-  "outreach-response-rate": "/metrics/outreach-response-rate/",
-  "ai-acceptance-rate": "/metrics/ai-acceptance-rate/",
+  "lifetime-response-rate": "/metrics/lifetime-response-rate/",
   "median-outreach": "/metrics/median-outreach/",
 };
 
