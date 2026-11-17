@@ -112,51 +112,36 @@ export interface SustainedEngagement {
   per_agent_platform: SustainedEngagementAgentPlatform[];
 }
 
-// ── M3: outreach-response-rate (lifetime, no params) ──────────────────────────
-export interface OutreachResponseRate {
-  status: string;
-  duration_seconds: number;
-  metric: string;
-  total_outreached: number;
-  total_with_conversation: number;
-  total_without_conversation: number;
-  rate_pct: number;
-  kpi_target_pct: number;
-  meets_kpi: boolean;
-}
-
-// ── M4: ai-acceptance-rate (lifetime; platform_id optional) ───────────────────
-export interface AiAcceptanceAgentPlatform {
-  agent_id: number | null;
-  agent_name: string | null;
+// ── M3: lifetime-response-rate (lifetime; platform_id optional) ───────────────
+export interface LifetimeResponsePlatform {
   platform_id: number | null;
   platform_name: string | null;
-  conversations: number;
-  suggests: number;
-  accepts: number;
-  rejects: number;
-  ignored: number;
-  acceptance_rate_pct: number;
+  total_messaged: number;
+  total_responded: number;
+  rate_pct: number;
 }
 
-export interface AiAcceptanceRate {
+export interface LifetimeResponseRate {
   status: string;
   duration_seconds: number;
   metric: string;
-  total_conversations: number;
-  total_suggests: number;
-  total_accepts: number;
-  total_rejects: number;
-  total_ignored: number;
-  acceptance_rate_pct: number;
-  per_agent_platform: AiAcceptanceAgentPlatform[];
+  platform_ids: number[] | null;
+  // Drivers with at least one successfully sent message, and how many of those ever wrote to us.
+  total_messaged: number;
+  total_responded: number;
+  total_not_responded: number;
+  rate_pct: number;
+  per_platform: LifetimeResponsePlatform[];
 }
 
-// ── M5: median-outreach (lifetime, no params) ─────────────────────────────────
+// ── M4: median-outreach (lifetime; platform_id optional) ──────────────────────
 export interface MedianOutreach {
   status: string;
   duration_seconds: number;
   metric: string;
+  platform_ids: number[] | null;
+  // Drivers who wrote to us after at least one opening template; the counts are templates
+  // sent up to each driver's first message.
   total_drivers: number;
   median_outreach_count: number;
   mean_outreach_count: number;
@@ -172,8 +157,7 @@ export const METRIC_IDS = [
   "active-driver-response-rate",
   "sustained-engagement",
   "avg-time-to-respond",
-  "outreach-response-rate",
-  "ai-acceptance-rate",
+  "lifetime-response-rate",
   "median-outreach",
 ] as const;
 
@@ -187,7 +171,6 @@ export interface MetricResponses {
   "active-driver-response-rate": ResponseRate;
   "sustained-engagement": SustainedEngagement;
   "avg-time-to-respond": AvgTimeToRespond;
-  "outreach-response-rate": OutreachResponseRate;
-  "ai-acceptance-rate": AiAcceptanceRate;
+  "lifetime-response-rate": LifetimeResponseRate;
   "median-outreach": MedianOutreach;
 }
