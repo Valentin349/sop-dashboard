@@ -21,6 +21,7 @@ export const METRIC_PATHS: Record<MetricId, string> = {
   // Same again: the sustained-engagement metric narrowed to one driver_type.
   "active-driver-sustained-engagement": "/metrics/sustained-engagement/",
   "avg-time-to-respond": "/metrics/avg-time-to-respond/",
+  "period-response-rate": "/metrics/period-response-rate/",
   "lifetime-response-rate": "/metrics/lifetime-response-rate/",
   "median-outreach": "/metrics/median-outreach/",
 };

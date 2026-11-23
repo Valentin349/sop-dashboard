@@ -11,6 +11,7 @@ import {
   type AvgTimeToRespond,
   type LifetimeResponseRate,
   type MedianOutreach,
+  type PeriodResponseRate,
   type ResponseRate,
   type SustainedEngagement,
 } from "@/lib/metrics/types";
@@ -24,6 +25,7 @@ const DATE_METRICS = new Set<MetricId>([
   "sustained-engagement",
   "active-driver-sustained-engagement",
   "avg-time-to-respond",
+  "period-response-rate",
 ]);
 const PLATFORM_METRICS = new Set<MetricId>([
   "response-rate",
@@ -31,6 +33,7 @@ const PLATFORM_METRICS = new Set<MetricId>([
   "sustained-engagement",
   "active-driver-sustained-engagement",
   "avg-time-to-respond",
+  "period-response-rate",
   "lifetime-response-rate",
   "median-outreach",
 ]);
@@ -285,6 +288,7 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
   // Same type as `se` — the sustained-engagement metric scoped to driver_type=active.
   const ase = data["active-driver-sustained-engagement"] as SustainedEngagement | undefined;
   const at = data["avg-time-to-respond"] as AvgTimeToRespond | undefined;
+  const pr = data["period-response-rate"] as PeriodResponseRate | undefined;
   const lr = data["lifetime-response-rate"] as LifetimeResponseRate | undefined;
   const mo = data["median-outreach"] as MedianOutreach | undefined;
 
@@ -342,9 +346,6 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
         : !aseFleet
           ? "No drivers marked active on this platform"
           : `${fmtInt(ase.total_sustained_drivers)} / ${fmtInt(ase.total_engaged_drivers)} engaged active drivers sustained`,
-      note: aseFleet
-        ? "Active is today's driver_type, applied over the period"
-        : undefined,
       target: aseFleet ? `\u2265 ${ase!.kpi_target_pct}%` : undefined,
       meets: aseFleet ? ase!.meets_kpi : undefined,
     }),
@@ -358,6 +359,15 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
         : "",
       target: at ? `median ≤ ${fmtMinutes(at.kpi_target_minutes)}` : undefined,
       meets: at?.meets_kpi,
+    }),
+    card("period-response-rate", {
+      title: "Period response rate",
+      scope: "Period",
+      value: pr ? fmtPct(pr.rate_pct) : "\u2014",
+      sub: pr
+        ? `${fmtInt(pr.total_responded)} / ${fmtInt(pr.total_messaged)} drivers`
+        : "",
+      note: "Drivers we successfully messaged in the period who wrote back in it",
     }),
     card("lifetime-response-rate", {
       title: "Lifetime response rate",

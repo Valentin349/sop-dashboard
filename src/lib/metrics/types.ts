@@ -141,6 +141,13 @@ export interface LifetimeResponseRate {
   per_platform: LifetimeResponsePlatform[];
 }
 
+// ── M8: period-response-rate (date range; platform_id optional) ───────────────
+// Lifetime response rate inside a date range: drivers successfully messaged in the period, and
+// how many of them wrote to us in it after our first message.
+export interface PeriodResponseRate extends LifetimeResponseRate {
+  period: MetricPeriod;
+}
+
 // ── M4: median-outreach (lifetime; platform_id optional) ──────────────────────
 export interface MedianOutreach {
   status: string;
@@ -165,6 +172,7 @@ export const METRIC_IDS = [
   "sustained-engagement",
   "active-driver-sustained-engagement",
   "avg-time-to-respond",
+  "period-response-rate",
   "lifetime-response-rate",
   "median-outreach",
 ] as const;
@@ -181,6 +189,7 @@ export interface MetricResponses {
   // Same endpoint and same shape as "sustained-engagement", called with driver_type=active.
   "active-driver-sustained-engagement": SustainedEngagement;
   "avg-time-to-respond": AvgTimeToRespond;
+  "period-response-rate": PeriodResponseRate;
   "lifetime-response-rate": LifetimeResponseRate;
   "median-outreach": MedianOutreach;
 }
