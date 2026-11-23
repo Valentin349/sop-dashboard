@@ -22,12 +22,14 @@ const DATE_METRICS = new Set<MetricId>([
   "response-rate",
   "active-driver-response-rate",
   "sustained-engagement",
+  "active-driver-sustained-engagement",
   "avg-time-to-respond",
 ]);
 const PLATFORM_METRICS = new Set<MetricId>([
   "response-rate",
   "active-driver-response-rate",
   "sustained-engagement",
+  "active-driver-sustained-engagement",
   "avg-time-to-respond",
   "lifetime-response-rate",
   "median-outreach",
@@ -36,8 +38,9 @@ const PLATFORM_METRICS = new Set<MetricId>([
 // The metrics that expose a per-agent × platform breakdown table.
 const BREAKDOWN_METRICS: { id: MetricId; label: string }[] = [
   { id: "response-rate", label: "Response rate" },
-  { id: "active-driver-response-rate", label: "Active drivers" },
+  { id: "active-driver-response-rate", label: "Active response rate" },
   { id: "sustained-engagement", label: "Sustained engagement" },
+  { id: "active-driver-sustained-engagement", label: "Active sustained engagement" },
   { id: "avg-time-to-respond", label: "Avg time to respond" },
 ];
 
@@ -279,6 +282,8 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
   // Same type as `rr` — it is the response-rate metric scoped to driver_type=active.
   const ad = data["active-driver-response-rate"] as ResponseRate | undefined;
   const se = data["sustained-engagement"] as SustainedEngagement | undefined;
+  // Same type as `se` — the sustained-engagement metric scoped to driver_type=active.
+  const ase = data["active-driver-sustained-engagement"] as SustainedEngagement | undefined;
   const at = data["avg-time-to-respond"] as AvgTimeToRespond | undefined;
   const lr = data["lifetime-response-rate"] as LifetimeResponseRate | undefined;
   const mo = data["median-outreach"] as MedianOutreach | undefined;
@@ -286,6 +291,7 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
   // Size of the active cohort; 0 or absent means the platform doesn't use driver_type at
   // all — every row there is `archive`.
   const adFleet = ad?.scope_total_drivers ?? 0;
+  const aseFleet = ase?.scope_total_drivers ?? 0;
 
   return [
     card("response-rate", {
@@ -324,6 +330,23 @@ function buildCards(data: DataMap, errors: ErrMap): Card[] {
         : "",
       target: se ? `≥ ${se.kpi_target_pct}%` : undefined,
       meets: se?.meets_kpi,
+    }),
+    card("active-driver-sustained-engagement", {
+      title: "Active driver sustained engagement",
+      scope: "Period",
+      // Same empty-cohort handling as the active response-rate card: no 0.0% "Below target"
+      // off a platform where nobody is marked active.
+      value: !ase ? "\u2014" : !aseFleet ? "n/a" : fmtPct(ase.rate_pct),
+      sub: !ase
+        ? ""
+        : !aseFleet
+          ? "No drivers marked active on this platform"
+          : `${fmtInt(ase.total_sustained_drivers)} / ${fmtInt(ase.total_engaged_drivers)} engaged active drivers sustained`,
+      note: aseFleet
+        ? "Active is today's driver_type, applied over the period"
+        : undefined,
+      target: aseFleet ? `\u2265 ${ase!.kpi_target_pct}%` : undefined,
+      meets: aseFleet ? ase!.meets_kpi : undefined,
     }),
     card("avg-time-to-respond", {
       title: "Response time",
@@ -438,6 +461,10 @@ const BREAKDOWN_COLUMNS: Record<string, { headers: string[]; numericFrom: number
     headers: ["Agent", "Platform", "Engaged", "Sustained", "Rate"],
     numericFrom: 2,
   },
+  "active-driver-sustained-engagement": {
+    headers: ["Agent", "Platform", "Engaged", "Sustained", "Rate"],
+    numericFrom: 2,
+  },
   "avg-time-to-respond": {
     headers: ["Agent", "Platform", "Type", "Responses", "Median", "Mean"],
     numericFrom: 3,
@@ -476,8 +503,10 @@ function buildRows(metricId: MetricId, data: DataMap): Row[] | null {
         ],
       }));
     }
-    case "sustained-engagement": {
-      const d = data["sustained-engagement"];
+    case "sustained-engagement":
+    case "active-driver-sustained-engagement": {
+      // Both metrics return SustainedEngagementAgentPlatform rows, so one arm covers them.
+      const d = data[metricId];
       if (!d) return null;
       return d.per_agent_platform.map((r, i) => ({
         key: `${r.agent_id}-${r.platform_id}-${i}`,

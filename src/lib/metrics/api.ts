@@ -18,6 +18,8 @@ export const METRIC_PATHS: Record<MetricId, string> = {
   // distinguishing query param lives in METRIC_PARAMS below.
   "active-driver-response-rate": "/metrics/response-rate/",
   "sustained-engagement": "/metrics/sustained-engagement/",
+  // Same again: the sustained-engagement metric narrowed to one driver_type.
+  "active-driver-sustained-engagement": "/metrics/sustained-engagement/",
   "avg-time-to-respond": "/metrics/avg-time-to-respond/",
   "lifetime-response-rate": "/metrics/lifetime-response-rate/",
   "median-outreach": "/metrics/median-outreach/",
@@ -31,6 +33,7 @@ export const METRIC_PARAMS: Partial<
   // Only `active`. `churn` and `archive` are drivers who have left; `new` drivers have no
   // conversation yet, so including them would inflate the denominator and nothing else.
   "active-driver-response-rate": { driver_type: "active" },
+  "active-driver-sustained-engagement": { driver_type: "active" },
 };
 
 export function isMetricId(v: string): v is MetricId {

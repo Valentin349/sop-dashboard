@@ -102,8 +102,15 @@ export interface SustainedEngagement {
     min_occasions: number;
     response_window_hours: number;
     platform_ids: number[] | null;
+    // Set when the call narrowed both sides of the rate to these crm.drivers.driver_type
+    // values (new/active/churn/archive); null for the whole roster.
+    driver_types: string[] | null;
   };
   platform_ids_in_result: number[];
+  // Both null unless `driver_types` narrowed the scope: the size of that cohort, and how much
+  // of it exists in comms at all. Neither feeds rate_pct.
+  scope_total_drivers: number | null;
+  scope_drivers_with_conversation: number | null;
   total_engaged_drivers: number;
   total_sustained_drivers: number;
   rate_pct: number;
@@ -156,6 +163,7 @@ export const METRIC_IDS = [
   "response-rate",
   "active-driver-response-rate",
   "sustained-engagement",
+  "active-driver-sustained-engagement",
   "avg-time-to-respond",
   "lifetime-response-rate",
   "median-outreach",
@@ -170,6 +178,8 @@ export interface MetricResponses {
   // driver_type=active, not a second calculation.
   "active-driver-response-rate": ResponseRate;
   "sustained-engagement": SustainedEngagement;
+  // Same endpoint and same shape as "sustained-engagement", called with driver_type=active.
+  "active-driver-sustained-engagement": SustainedEngagement;
   "avg-time-to-respond": AvgTimeToRespond;
   "lifetime-response-rate": LifetimeResponseRate;
   "median-outreach": MedianOutreach;
